@@ -66,6 +66,17 @@ final class PlayerController: ObservableObject {
         player.position = value
     }
 
+    /// 按秒快进/快退（负数=后退）
+    func skip(_ seconds: Double) {
+        let length = Double(player.media?.length.intValue ?? 0) / 1000.0
+        guard length > 1 else { return }
+        let current = Double(player.position) * length
+        var target = current + seconds
+        target = min(max(0.2, target), length - 0.4)
+        player.position = Float(target / length)
+        Boot.mark("K skip \(Int(seconds))s -> \(Int(target))s")
+    }
+
     func toggleSubtitles() {
         guard let videoURL, subtitleURL != nil else { return }
         subtitlesEnabled.toggle()
@@ -133,6 +144,21 @@ struct PlayerScreen: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 30)
+                        .onEnded { value in
+                            let dx = value.translation.width
+                            guard abs(dx) > 45 else { return }
+                            let seconds = min(120.0, max(10.0, Double(abs(dx)) / 6.0))
+                            controller.skip(dx > 0 ? seconds : -seconds)
+                        }
+                )
+
             if showControls {
                 VStack(spacing: 0) {
                     topBar
@@ -151,7 +177,6 @@ struct PlayerScreen: View {
             }
         }
         .statusBarHidden(true)
-        .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() } }
         .onAppear {
             controller.open(video: item.url, subtitle: item.subtitleURL)
         }
@@ -225,7 +250,7 @@ struct PlayerScreen: View {
 
             HStack(spacing: 26) {
                 Button {
-                    controller.seek(to: max(0, controller.position - 0.02))
+                    controller.skip(-10)
                 } label: {
                     Image(systemName: "gobackward.10")
                         .font(.system(size: 22))
@@ -241,7 +266,7 @@ struct PlayerScreen: View {
                 }
 
                 Button {
-                    controller.seek(to: min(1, controller.position + 0.02))
+                    controller.skip(10)
                 } label: {
                     Image(systemName: "goforward.10")
                         .font(.system(size: 22))
