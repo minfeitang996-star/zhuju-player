@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import UIKit
 import MobileVLCKit
 
@@ -26,6 +26,7 @@ final class VLCPlayerContainer: UIView {
     private var mode: VideoMode = .fill
     private var respectSafeArea = false
     private var videoSize: CGSize = .zero
+    private var aspect: CGFloat?
 
     var drawableView: UIView { inner }
 
@@ -45,9 +46,10 @@ final class VLCPlayerContainer: UIView {
         addSubview(inner)
     }
 
-    func update(mode: VideoMode, safeArea: Bool, videoSize: CGSize) {
+    func update(mode: VideoMode, safeArea: Bool, videoSize: CGSize, aspect: CGFloat?) {
         self.mode = mode
         self.respectSafeArea = safeArea
+        self.aspect = aspect
         if videoSize.width > 0, videoSize.height > 0 {
             self.videoSize = videoSize
         }
@@ -66,7 +68,8 @@ final class VLCPlayerContainer: UIView {
         let area = respectSafeArea ? bounds.inset(by: windowInsets) : bounds
         guard area.width > 0, area.height > 0 else { return }
 
-        let vs = (videoSize.width > 0 && videoSize.height > 0) ? videoSize : area.size
+        var vs = (videoSize.width > 0 && videoSize.height > 0) ? videoSize : area.size
+        if let aspect, aspect > 0 { vs = CGSize(width: aspect, height: 1) }
 
         inner.transform = .identity
         inner.frame = area
@@ -95,6 +98,7 @@ struct VLCVideoView: UIViewRepresentable {
     let player: VLCMediaPlayer
     var mode: VideoMode
     var safeArea: Bool
+    var aspect: CGFloat?
 
     func makeUIView(context: Context) -> VLCPlayerContainer {
         let view = VLCPlayerContainer()
@@ -103,6 +107,6 @@ struct VLCVideoView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: VLCPlayerContainer, context: Context) {
-        uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize)
+        uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
     }
 }

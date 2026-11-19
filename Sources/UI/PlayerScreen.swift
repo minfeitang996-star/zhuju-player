@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 import MobileVLCKit
 
 final class PlayerController: ObservableObject {
@@ -30,6 +31,7 @@ final class PlayerController: ObservableObject {
         videoURL = video
         subtitleURL = subtitle
         subtitlesEnabled = subtitle != nil
+        UserDefaults.standard.set(video.lastPathComponent, forKey: "lastMedia")
 
         Boot.mark("D player.open \(video.lastPathComponent)")
         let media = makeMedia(url: video, subtitle: subtitle)
@@ -38,8 +40,13 @@ final class PlayerController: ObservableObject {
         Boot.mark("F media.assigned")
         player.play()
         Boot.mark("G play.called")
-        player.rate = rate
+        player.rate = Prefs.keepRate ? rate : 1.0
+        if !Prefs.keepRate { rate = 1.0 }
         UIApplication.shared.isIdleTimerDisabled = true
+        if Prefs.backgroundAudio {
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
         restoreResume(after: 1.2)
 
         timer?.invalidate()
@@ -58,6 +65,9 @@ final class PlayerController: ObservableObject {
             if length > 0, self.player.position >= 0.995 {
                 if let url = self.videoURL {
                     UserDefaults.standard.removeObject(forKey: "resume:\(url.lastPathComponent)")
+                    if UserDefaults.standard.string(forKey: "lastMedia") == url.lastPathComponent {
+                        UserDefaults.standard.removeObject(forKey: "lastMedia")
+                    }
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
             }
@@ -116,6 +126,18 @@ final class PlayerController: ObservableObject {
         let scale = Int(rawScale)
         media.addOption(":sub-text-scale=\(scale)")
 
+        switch Prefs.hwDecode {
+        case "hw":
+            media.addOption(":avcodec-hw=any")
+        case "sw":
+            media.addOption(":avcodec-hw=none")
+        default:
+            break
+        }
+        if Prefs.deinterlace {
+            media.addOption(":deinterlace=1")
+        }
+
         if subtitlesEnabled, let subtitle {
             media.addOption(":sub-file=\(subtitle.path)")
         } else {
@@ -132,11 +154,13 @@ final class PlayerController: ObservableObject {
     }
 
     func saveResume() {
+        guard Prefs.resumeEnabled else { return }
         guard let videoURL else { return }
         UserDefaults.standard.set(Double(player.position), forKey: "resume:\(videoURL.lastPathComponent)")
     }
 
     private func restoreResume(after delay: Double) {
+        guard Prefs.resumeEnabled else { return }
         guard let videoURL else { return }
         let saved = UserDefaults.standard.double(forKey: "resume:\(videoURL.lastPathComponent)")
         guard saved > 0.01, saved < 0.99 else { return }
@@ -169,6 +193,7 @@ struct PlayerScreen: View {
     @State private var showJob = false
     @State private var showControls = true
     @State private var isFullscreen = false
+    @State private var hideTask: Task<Void, Never>?
     @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fill") ?? .fill
     @State private var videoSafeArea: Bool = UserDefaults.standard.object(forKey: "videoSafeArea") as? Bool ?? false
 
@@ -180,7 +205,7 @@ struct PlayerScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VLCVideoView(player: controller.player, mode: videoMode, safeArea: videoSafeArea)
+            VLCVideoView(player: controller.player, mode: videoMode, safeArea: videoSafeArea, aspect: Prefs.aspectRatio)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
@@ -188,6 +213,7 @@ struct PlayerScreen: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                    if showControls { scheduleHide() }
                 }
                 .gesture(
                     DragGesture(minimumDistance: 30)
@@ -219,6 +245,17 @@ struct PlayerScreen: View {
         .statusBarHidden(true)
         .onAppear {
             controller.open(video: item.url, subtitle: item.subtitleURL)
+            switch Prefs.orientation {
+            case "landscape":
+                isFullscreen = true
+                OrientationHelper.apply(.landscapeRight)
+            case "portrait":
+                isFullscreen = false
+                OrientationHelper.apply(.portrait)
+            default:
+                OrientationHelper.apply(.all)
+            }
+            scheduleHide()
         }
         .onDisappear {
             controller.close()
@@ -249,6 +286,12 @@ struct PlayerScreen: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
 
+            if Prefs.showClock {
+                Text(Date(), style: .time)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.75))
+            }
+
             Spacer()
 
             Button {
@@ -270,9 +313,11 @@ struct PlayerScreen: View {
     private var bottomBar: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
-                Text(controller.timeText)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.8))
+                if Prefs.showElapsed {
+                    Text(controller.timeText)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                }
 
                 Slider(
                     value: Binding(
@@ -290,9 +335,9 @@ struct PlayerScreen: View {
 
             HStack(spacing: 20) {
                 Button {
-                    controller.skip(-10)
+                    controller.skip(-Prefs.skipBack)
                 } label: {
-                    Image(systemName: "gobackward.10")
+                    Image(systemName: "gobackward")
                         .font(.system(size: 22))
                         .foregroundColor(.white.opacity(0.9))
                 }
@@ -306,9 +351,9 @@ struct PlayerScreen: View {
                 }
 
                 Button {
-                    controller.skip(10)
+                    controller.skip(Prefs.skipForward)
                 } label: {
-                    Image(systemName: "goforward.10")
+                    Image(systemName: "goforward")
                         .font(.system(size: 22))
                         .foregroundColor(.white.opacity(0.9))
                 }
@@ -384,6 +429,17 @@ struct PlayerScreen: View {
         UserDefaults.standard.set(mode.rawValue, forKey: "videoMode")
         UserDefaults.standard.set(safeArea, forKey: "videoSafeArea")
         Boot.mark("J aspect \(mode.rawValue) safeArea=\(safeArea)")
+    }
+
+    private func scheduleHide() {
+        hideTask?.cancel()
+        guard Prefs.autoHideMenu else { return }
+        let delay = Prefs.autoHideDelay
+        hideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
+        }
     }
 
     private func toggleFullscreen() {

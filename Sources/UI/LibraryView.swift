@@ -49,7 +49,7 @@ struct LibraryView: View {
             } message: {
                 Text(importErrors ?? "")
             }
-            .fullScreenCover(item: $selected) { item in
+            .fullScreenCover(item: $selected, onDismiss: { library.reload() }) { item in
                 PlayerScreen(item: item)
                     .environmentObject(library)
             }
@@ -60,6 +60,16 @@ struct LibraryView: View {
 
     private var list: some View {
         List {
+            if let resume = resumeItem {
+                Button {
+                    selected = resume
+                } label: {
+                    resumeRow(resume)
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Color(red: 1.0, green: 0.72, blue: 0.25).opacity(0.16))
+            }
+
             ForEach(library.items) { item in
                 Button {
                     selected = item
@@ -71,13 +81,53 @@ struct LibraryView: View {
             }
             .onDelete { indexSet in
                 for index in indexSet {
-                    library.delete(library.items[index])
+                    let item = library.items[index]
+                    if UserDefaults.standard.string(forKey: "lastMedia") == item.url.lastPathComponent {
+                        UserDefaults.standard.removeObject(forKey: "lastMedia")
+                    }
+                    library.delete(item)
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .refreshable { library.reload() }
+    }
+
+    /// 上次没看完的那一部（跨启动记忆播放）
+    private var resumeItem: MediaItem? {
+        guard Prefs.resumeEnabled else { return nil }
+        guard let name = UserDefaults.standard.string(forKey: "lastMedia") else { return nil }
+        guard let item = library.items.first(where: { $0.url.lastPathComponent == name }) else { return nil }
+        let saved = UserDefaults.standard.double(forKey: "resume:\(name)")
+        guard saved > 0.02, saved < 0.98 else { return nil }
+        return item
+    }
+
+    private func resumeRow(_ item: MediaItem) -> some View {
+        let saved = UserDefaults.standard.double(forKey: "resume:\(item.url.lastPathComponent)")
+        return HStack(spacing: 12) {
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 34))
+                .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("继续播放 · \(Int(saved * 100))%")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                Text(item.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.gray.opacity(0.6))
+        }
+        .padding(.vertical, 8)
     }
 
     private func row(_ item: MediaItem) -> some View {

@@ -16,6 +16,21 @@ struct SettingsView: View {
         NavigationView {
             Form {
                 Section {
+                    NavigationLink {
+                        PlaybackSettingsView()
+                    } label: {
+                        Label("播放设置", systemImage: "play.circle")
+                    }
+                    NavigationLink {
+                        VideoSettingsView()
+                    } label: {
+                        Label("视频设置", systemImage: "rectangle.on.rectangle")
+                    }
+                } footer: {
+                    Text("播放：自动隐藏菜单、时间显示、屏幕方向、快进快退秒数、断点续播、后台播放。视频：缩放模式、长宽比、解码方式、去隔行、字幕大小。")
+                }
+
+                Section {
                     ForEach(ModelManager.catalog) { model in
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 2) {
@@ -63,20 +78,6 @@ struct SettingsView: View {
                     Toggle("启用翻译", isOn: $translateEnabled)
                 } footer: {
                     Text("关掉就只生成原语言字幕，速度快一倍。")
-                }
-
-                Section {
-                    HStack {
-                        Text("字幕大小")
-                        Spacer()
-                        Text("\(Int(subScale))%")
-                            .foregroundColor(.secondary)
-                    }
-                    Slider(value: $subScale, in: 70...200, step: 5)
-                } header: {
-                    Text("字幕")
-                } footer: {
-                    Text("下一次打开视频生效。")
                 }
 
                 Section {
