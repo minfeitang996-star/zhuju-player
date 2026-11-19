@@ -65,6 +65,7 @@ final class PlayerController: ObservableObject {
             if length > 0, self.player.position >= 0.995 {
                 if let url = self.videoURL {
                     UserDefaults.standard.removeObject(forKey: "resume:\(url.lastPathComponent)")
+                    UserDefaults.standard.set(true, forKey: "done:\(url.lastPathComponent)")
                     if UserDefaults.standard.string(forKey: "lastMedia") == url.lastPathComponent {
                         UserDefaults.standard.removeObject(forKey: "lastMedia")
                     }
@@ -156,7 +157,11 @@ final class PlayerController: ObservableObject {
     func saveResume() {
         guard Prefs.resumeEnabled else { return }
         guard let videoURL else { return }
-        UserDefaults.standard.set(Double(player.position), forKey: "resume:\(videoURL.lastPathComponent)")
+        let pos = Double(player.position)
+        UserDefaults.standard.set(pos, forKey: "resume:\(videoURL.lastPathComponent)")
+        if pos < 0.95 {
+            UserDefaults.standard.removeObject(forKey: "done:\(videoURL.lastPathComponent)")
+        }
     }
 
     private func restoreResume(after delay: Double) {

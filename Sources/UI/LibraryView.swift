@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import UniformTypeIdentifiers
 
 struct LibraryView: View {
@@ -85,6 +85,8 @@ struct LibraryView: View {
                     if UserDefaults.standard.string(forKey: "lastMedia") == item.url.lastPathComponent {
                         UserDefaults.standard.removeObject(forKey: "lastMedia")
                     }
+                    UserDefaults.standard.removeObject(forKey: "resume:\(item.url.lastPathComponent)")
+                    UserDefaults.standard.removeObject(forKey: "done:\(item.url.lastPathComponent)")
                     library.delete(item)
                 }
             }
@@ -92,6 +94,14 @@ struct LibraryView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .refreshable { library.reload() }
+    }
+
+    /// 单个视频看过的进度：0.02~0.98 是有进度，1.0 是已看完
+    private func progress(for item: MediaItem) -> Double? {
+        let name = item.url.lastPathComponent
+        if UserDefaults.standard.bool(forKey: "done:\(name)") { return 1.0 }
+        let saved = UserDefaults.standard.double(forKey: "resume:\(name)")
+        return (saved > 0.02 && saved < 0.98) ? saved : nil
     }
 
     /// 上次没看完的那一部（跨启动记忆播放）
@@ -156,6 +166,28 @@ struct LibraryView: View {
                 }
                 .font(.system(size: 11))
                 .foregroundColor(.gray)
+
+                if let progressValue = progress(for: item) {
+                    if progressValue >= 1.0 {
+                        Label("已看完", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color(red: 0.45, green: 0.85, blue: 0.55))
+                    } else {
+                        HStack(spacing: 6) {
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.15))
+                                    .frame(width: 90, height: 4)
+                                Capsule()
+                                    .fill(Color(red: 1.0, green: 0.72, blue: 0.25))
+                                    .frame(width: max(2, 90 * CGFloat(progressValue)), height: 4)
+                            }
+                            Text("看到 \(Int(progressValue * 100))%")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                        }
+                    }
+                }
             }
 
             Spacer()
