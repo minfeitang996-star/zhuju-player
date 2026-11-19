@@ -1,0 +1,16 @@
+# Xcode / CocoaPods 生成物
+Pods/
+build/
+*.xcodeproj
+*.xcworkspace
+*.xcuserstate
+DerivedData/
+ThirdParty/whisper.xcframework/
+whisper-src/
+build.log
+Payload/
+*.ipa
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
