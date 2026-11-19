@@ -131,6 +131,7 @@ struct PlayerScreen: View {
             Color.black.ignoresSafeArea()
             VLCVideoView(player: controller.player, mode: videoMode, safeArea: videoSafeArea)
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             if showControls {
                 VStack(spacing: 0) {
@@ -150,7 +151,6 @@ struct PlayerScreen: View {
             }
         }
         .statusBarHidden(true)
-        .onTapGesture(count: 2) { toggleFullscreen() }
         .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() } }
         .onAppear {
             controller.open(video: item.url, subtitle: item.subtitleURL)
@@ -307,5 +307,6 @@ struct PlayerScreen: View {
         isFullscreen.toggle()
         Boot.mark("I fullscreen=\(isFullscreen)")
         OrientationHelper.apply(isFullscreen ? .landscapeRight : .portrait)
+        withAnimation(.easeInOut(duration: 0.2)) { showControls = true }
     }
 }
