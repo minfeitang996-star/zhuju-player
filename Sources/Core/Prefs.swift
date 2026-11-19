@@ -9,7 +9,7 @@ enum Prefs {
     static var autoHideDelay: Double { UserDefaults.standard.object(forKey: "autoHideDelay") as? Double ?? 5 }
     static var showElapsed: Bool { UserDefaults.standard.object(forKey: "showElapsed") as? Bool ?? true }
     static var showClock: Bool { UserDefaults.standard.bool(forKey: "showClock") }
-    static var orientation: String { UserDefaults.standard.string(forKey: "orientationPref") ?? "auto" }
+    static var orientation: String { UserDefaults.standard.string(forKey: "orientationPref") ?? "landscape" }
     static var skipBack: Double { UserDefaults.standard.object(forKey: "skipBack") as? Double ?? 10 }
     static var skipForward: Double { UserDefaults.standard.object(forKey: "skipForward") as? Double ?? 15 }
     static var resumeEnabled: Bool { UserDefaults.standard.object(forKey: "resumeEnabled") as? Bool ?? true }
@@ -29,6 +29,16 @@ enum Prefs {
         case "21:9": return 21.0 / 9.0
         default: return nil
         }
+    }
+
+    /// 1.2.0 起：点开视频默认横屏满屏 + 填充铺满，老用户也强制刷一次
+    static func migrateLayoutDefaults() {
+        let key = "prefsLayoutVersion"
+        guard UserDefaults.standard.string(forKey: key) != "1.2.0" else { return }
+        UserDefaults.standard.set("fill", forKey: "videoMode")
+        UserDefaults.standard.set(false, forKey: "videoSafeArea")
+        UserDefaults.standard.set("landscape", forKey: "orientationPref")
+        UserDefaults.standard.set("1.2.0", forKey: key)
     }
 
     static func clearHistory() {

@@ -6,7 +6,7 @@ struct PlaybackSettingsView: View {
     @AppStorage("autoHideDelay") private var autoHideDelay: Double = 5
     @AppStorage("showElapsed") private var showElapsed: Bool = true
     @AppStorage("showClock") private var showClock: Bool = false
-    @AppStorage("orientationPref") private var orientationPref: String = "auto"
+    @AppStorage("orientationPref") private var orientationPref: String = "landscape"
     @AppStorage("skipBack") private var skipBack: Double = 10
     @AppStorage("skipForward") private var skipForward: Double = 15
     @AppStorage("resumeEnabled") private var resumeEnabled: Bool = true

@@ -1,4 +1,4 @@
-name: ZhuJu
+﻿name: ZhuJu
 options:
   bundleIdPrefix: com.zhuju
   deploymentTarget:
@@ -10,7 +10,7 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     IPHONEOS_DEPLOYMENT_TARGET: "16.4"
-    MARKETING_VERSION: "1.1.0"
+    MARKETING_VERSION: "1.2.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: ""
@@ -43,7 +43,7 @@ targets:
     info:
       path: ZhuJu/Info.plist
       properties:
-        CFBundleDisplayName: 逐句
+        CFBundleDisplayName: 糖敏飞视频播放器
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDevelopmentRegion: zh_CN

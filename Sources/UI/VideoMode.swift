@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 import UIKit
 import MobileVLCKit
 
@@ -47,12 +47,14 @@ final class VLCPlayerContainer: UIView {
     }
 
     func update(mode: VideoMode, safeArea: Bool, videoSize: CGSize, aspect: CGFloat?) {
+        let newSize = (videoSize.width > 0 && videoSize.height > 0) ? videoSize : self.videoSize
+        if mode == self.mode, safeArea == self.respectSafeArea, aspect == self.aspect, newSize == self.videoSize {
+            return
+        }
         self.mode = mode
         self.respectSafeArea = safeArea
         self.aspect = aspect
-        if videoSize.width > 0, videoSize.height > 0 {
-            self.videoSize = videoSize
-        }
+        self.videoSize = newSize
         setNeedsLayout()
     }
 
@@ -99,6 +101,7 @@ struct VLCVideoView: UIViewRepresentable {
     var mode: VideoMode
     var safeArea: Bool
     var aspect: CGFloat?
+    var tick: Int = 0
 
     func makeUIView(context: Context) -> VLCPlayerContainer {
         let view = VLCPlayerContainer()
@@ -107,6 +110,7 @@ struct VLCVideoView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: VLCPlayerContainer, context: Context) {
+        _ = tick
         uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
     }
 }

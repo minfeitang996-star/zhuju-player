@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import UniformTypeIdentifiers
 
 struct LibraryView: View {
@@ -22,7 +22,7 @@ struct LibraryView: View {
                     list
                 }
             }
-            .navigationTitle("逐句")
+            .navigationTitle("糖敏飞视频播放器")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -175,7 +175,7 @@ struct LibraryView: View {
             Text("还没有视频")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white)
-            Text("从「文件」里导入，或者用电脑把视频放进\n「文件 App → 我的 iPhone → 逐句 → Media」")
+            Text("从「文件」里导入，或者用电脑把视频放进\n「文件 App → 我的 iPhone → 糖敏飞视频播放器 → Media」")
                 .font(.system(size: 13))
                 .multilineTextAlignment(.center)
                 .foregroundColor(.gray)

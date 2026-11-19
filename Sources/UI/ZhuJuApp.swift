@@ -6,6 +6,7 @@ struct ZhuJuApp: App {
     @StateObject private var library = MediaLibrary()
 
     init() {
+        Prefs.migrateLayoutDefaults()
         Boot.mark("A app.init")
     }
 

@@ -26,17 +26,7 @@ enum OrientationHelper {
             ?? scene.windows.first?.rootViewController
         root?.setNeedsUpdateOfSupportedInterfaceOrientations()
 
-        let preferences: UIWindowScene.GeometryPreferences.iOS
-        switch mask {
-        case .landscapeRight:
-            preferences = .iOS(interfaceOrientations: .landscapeRight)
-        case .landscapeLeft:
-            preferences = .iOS(interfaceOrientations: .landscapeLeft)
-        case .landscape:
-            preferences = .iOS(interfaceOrientations: .landscape)
-        default:
-            preferences = .iOS(interfaceOrientations: .portrait)
-        }
+        let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: mask)
 
         scene.requestGeometryUpdate(preferences) { error in
             NSLog("ZhuJu orientation failed: \(error)")

@@ -194,6 +194,7 @@ struct PlayerScreen: View {
     @State private var showControls = true
     @State private var isFullscreen = false
     @State private var hideTask: Task<Void, Never>?
+    @State private var layoutTick = 0
     @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fill") ?? .fill
     @State private var videoSafeArea: Bool = UserDefaults.standard.object(forKey: "videoSafeArea") as? Bool ?? false
 
@@ -205,7 +206,7 @@ struct PlayerScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VLCVideoView(player: controller.player, mode: videoMode, safeArea: videoSafeArea, aspect: Prefs.aspectRatio)
+            VLCVideoView(player: controller.player, mode: videoMode, safeArea: videoSafeArea, aspect: Prefs.aspectRatio, tick: layoutTick)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
@@ -243,12 +244,19 @@ struct PlayerScreen: View {
             }
         }
         .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+        .onReceive(Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()) { _ in
+            layoutTick += 1
+        }
         .onAppear {
             controller.open(video: item.url, subtitle: item.subtitleURL)
             switch Prefs.orientation {
             case "landscape":
                 isFullscreen = true
                 OrientationHelper.apply(.landscapeRight)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                    OrientationHelper.apply(.landscapeRight)
+                }
             case "portrait":
                 isFullscreen = false
                 OrientationHelper.apply(.portrait)
