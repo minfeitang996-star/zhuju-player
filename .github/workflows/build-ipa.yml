@@ -1,4 +1,4 @@
-name: Build TrollStore IPA
+﻿name: Build TrollStore IPA
 
 on:
   push:
@@ -7,7 +7,12 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        runner: [macos-15-intel, macos-15]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     steps:
       - name: Checkout
@@ -100,7 +105,7 @@ jobs:
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ZhuJu-ipa
+          name: ZhuJu-ipa-${{ matrix.runner }}
           path: ZhuJu.ipa
           retention-days: 30
 
@@ -108,7 +113,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
+          name: build-log-${{ matrix.runner }}
           path: build.log
           if-no-files-found: ignore
           retention-days: 7
