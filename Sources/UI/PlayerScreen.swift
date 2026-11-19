@@ -107,20 +107,6 @@ final class PlayerController: ObservableObject {
     }
 }
 
-struct VLCVideoView: UIViewRepresentable {
-    let player: VLCMediaPlayer
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .black
-        view.clipsToBounds = true
-        player.drawable = view
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) { }
-}
-
 struct PlayerScreen: View {
 
     let item: MediaItem
@@ -132,6 +118,8 @@ struct PlayerScreen: View {
     @State private var showJob = false
     @State private var showControls = true
     @State private var isFullscreen = false
+    @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fit") ?? .fit
+    @State private var videoSafeArea: Bool = UserDefaults.standard.object(forKey: "videoSafeArea") as? Bool ?? false
 
     init(item: MediaItem) {
         self.item = item
@@ -141,7 +129,7 @@ struct PlayerScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VLCVideoView(player: controller.player)
+            VLCVideoView(player: controller.player, mode: videoMode, safeArea: videoSafeArea)
                 .ignoresSafeArea()
 
             if showControls {
@@ -235,7 +223,7 @@ struct PlayerScreen: View {
                     .foregroundColor(.white.opacity(0.8))
             }
 
-            HStack(spacing: 34) {
+            HStack(spacing: 26) {
                 Button {
                     controller.seek(to: max(0, controller.position - 0.02))
                 } label: {
@@ -268,6 +256,8 @@ struct PlayerScreen: View {
                         .foregroundColor(.white.opacity(0.9))
                 }
 
+                aspectMenu
+
                 Button {
                     controller.toggleSubtitles()
                 } label: {
@@ -282,12 +272,40 @@ struct PlayerScreen: View {
         .padding(.horizontal, 16)
     }
 
+    private var aspectMenu: some View {
+        Menu {
+            ForEach(VideoMode.allCases) { mode in
+                Section(mode.title) {
+                    Button {
+                        select(mode: mode, safeArea: false)
+                    } label: {
+                        Text((videoMode == mode && !videoSafeArea ? "✓ " : "") + mode.title)
+                    }
+                    Button {
+                        select(mode: mode, safeArea: true)
+                    } label: {
+                        Text((videoMode == mode && videoSafeArea ? "✓ " : "") + mode.title + "（Safe Area）")
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "aspectratio")
+                .font(.system(size: 20))
+                .foregroundColor(.white.opacity(0.9))
+        }
+    }
+
+    private func select(mode: VideoMode, safeArea: Bool) {
+        videoMode = mode
+        videoSafeArea = safeArea
+        UserDefaults.standard.set(mode.rawValue, forKey: "videoMode")
+        UserDefaults.standard.set(safeArea, forKey: "videoSafeArea")
+        Boot.mark("J aspect \(mode.rawValue) safeArea=\(safeArea)")
+    }
+
     private func toggleFullscreen() {
         isFullscreen.toggle()
         Boot.mark("I fullscreen=\(isFullscreen)")
         OrientationHelper.apply(isFullscreen ? .landscapeRight : .portrait)
-        withAnimation(.easeInOut(duration: 0.2)) {
-            showControls = !isFullscreen
-        }
     }
 }
