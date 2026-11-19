@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 
-@MainActor
 final class SubtitleJob: ObservableObject {
 
     @Published var status: String = "准备中…"
@@ -13,6 +12,34 @@ final class SubtitleJob: ObservableObject {
 
     private var isRunning = false
 
+    // 所有 UI 状态只在主线程更新
+    private func apply(status: String? = nil,
+                       progress: Double? = nil,
+                       errorText: String? = nil,
+                       notice: String? = nil,
+                       cueCount: Int? = nil,
+                       finished: Bool? = nil) {
+        DispatchQueue.main.async {
+            if let status = status { self.status = status }
+            if let progress = progress { self.progress = progress }
+            if let errorText = errorText { self.errorText = errorText }
+            if let notice = notice { self.notice = notice }
+            if let cueCount = cueCount { self.cueCount = cueCount }
+            if let finished = finished { self.finished = finished }
+        }
+    }
+
+    private func reset() {
+        DispatchQueue.main.async {
+            self.status = "准备中…"
+            self.progress = 0
+            self.errorText = nil
+            self.notice = nil
+            self.finished = false
+            self.cueCount = 0
+        }
+    }
+
     func run(videoURL: URL,
              modelID: String,
              language: String?,
@@ -22,20 +49,15 @@ final class SubtitleJob: ObservableObject {
         isRunning = true
         defer { isRunning = false }
 
-        errorText = nil
-        notice = nil
-        finished = false
-        cueCount = 0
-        progress = 0
+        reset()
 
         do {
             guard let modelURL = ModelManager.shared.localURL(modelID) else {
-                status = "模型还没下载"
-                errorText = "先去设置里下载识别模型（推荐 base）"
+                apply(status: "模型还没下载", errorText: "先去设置里下载识别模型（推荐 base）")
                 return
             }
 
-            status = "加载识别模型…"
+            apply(status: "加载识别模型…", progress: 0.02)
             let engine = WhisperEngine()
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 DispatchQueue.global(qos: .userInitiated).async {
@@ -50,17 +72,18 @@ final class SubtitleJob: ObservableObject {
 
             var workingURL = videoURL
 
-            status = "检查音轨…"
+            apply(status: "检查音轨…", progress: 0.05)
             if !AudioExtractor.probe(url: videoURL) {
-                status = "该容器需要先转码音轨…"
-                notice = "这格式 AVFoundation 打不开，正在用 VLC 内核导出音轨，耗时大致等于视频时长。建议插电放着跑。"
+                apply(status: "该容器需要先转码音轨…",
+                      progress: 0.06,
+                      notice: "这格式系统框架打不开，正在用 VLC 内核导出音轨，耗时大致等于视频时长。建议插电放着跑。")
                 let tmp = FileManager.default.temporaryDirectory
                     .appendingPathComponent("zhuju_audio.m4a")
                 try await transcode(source: videoURL, destination: tmp)
                 workingURL = tmp
             }
 
-            status = "识别语音…"
+            apply(status: "识别语音…", progress: 0.15)
             let cues = try await transcribe(videoURL: workingURL,
                                             engine: engine,
                                             language: language,
@@ -68,42 +91,37 @@ final class SubtitleJob: ObservableObject {
                                             span: 0.7)
 
             guard !cues.isEmpty else {
-                status = "没识别出内容"
-                errorText = "这段视频里没有可识别的语音，或者模型太小没撑住，换个更大的模型再试"
+                apply(status: "没识别出内容",
+                      errorText: "这段视频里没有可识别的语音，或者模型太小没撑住，换个更大的模型再试")
                 return
             }
 
-            cueCount = cues.count
+            apply(cueCount: cues.count)
             var finalCues = cues
 
             if translate {
                 let config = TranslatorConfig.load()
                 if config.isUsable {
-                    status = "翻译成中文…"
+                    apply(status: "翻译成中文…", progress: 0.85)
                     do {
                         finalCues = try await SubtitleTranslator.translate(cues, config: config) { value in
-                            Task { @MainActor in
-                                self.progress = 0.85 + 0.14 * value
-                            }
+                            self.apply(progress: 0.85 + 0.14 * value)
                         }
                     } catch {
-                        notice = "翻译没成功，已先生成原文对照字幕：\(error.localizedDescription)"
+                        apply(notice: "翻译没成功，已先生成原文对照字幕：\(error.localizedDescription)")
                     }
                 } else {
-                    notice = "没配置翻译接口，已生成原文对照字幕。去设置填接口就能出中文。"
+                    apply(notice: "没配置翻译接口，已生成原文对照字幕。去设置里填接口就能出中文。")
                 }
             }
 
-            status = "写入字幕…"
+            apply(status: "写入字幕…", progress: 0.99)
             let destination = videoURL.deletingPathExtension().appendingPathExtension("srt")
             try SubtitleFile.write(finalCues, to: destination)
 
-            progress = 1
-            finished = true
-            status = "完成，共 \(finalCues.count) 条字幕"
+            apply(status: "完成，共 \(finalCues.count) 条字幕", progress: 1, finished: true)
         } catch {
-            status = "失败"
-            errorText = error.localizedDescription
+            apply(status: "失败", errorText: error.localizedDescription)
         }
     }
 
@@ -113,9 +131,7 @@ final class SubtitleJob: ObservableObject {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let ripper = VLCAudioRipper(source: source, destination: destination)
             ripper.start(onProgress: { value in
-                Task { @MainActor in
-                    self.progress = 0.05 + 0.10 * value
-                }
+                self.apply(progress: 0.06 + 0.09 * value)
             }, completion: { error in
                 if let error = error {
                     continuation.resume(throwing: error)
@@ -144,9 +160,7 @@ final class SubtitleJob: ObservableObject {
                             lock.unlock()
                         }
                     }, onProgress: { value in
-                        Task { @MainActor in
-                            self.progress = base + span * value
-                        }
+                        self.apply(progress: base + span * value)
                     })
                     lock.lock()
                     let snapshot = cues
