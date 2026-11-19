@@ -118,7 +118,7 @@ struct PlayerScreen: View {
     @State private var showJob = false
     @State private var showControls = true
     @State private var isFullscreen = false
-    @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fit") ?? .fit
+    @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fill") ?? .fill
     @State private var videoSafeArea: Bool = UserDefaults.standard.object(forKey: "videoSafeArea") as? Bool ?? false
 
     init(item: MediaItem) {

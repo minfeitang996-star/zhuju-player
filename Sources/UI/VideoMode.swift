@@ -23,7 +23,7 @@ enum VideoMode: String, CaseIterable, Identifiable {
 final class VLCPlayerContainer: UIView {
 
     private let inner = UIView()
-    private var mode: VideoMode = .fit
+    private var mode: VideoMode = .fill
     private var respectSafeArea = false
     private var videoSize: CGSize = .zero
 
