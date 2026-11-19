@@ -82,6 +82,7 @@ final class MediaLibrary: ObservableObject {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         root = docs.appendingPathComponent("Media", isDirectory: true)
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        Boot.mark("B library.init")
         reload()
     }
 

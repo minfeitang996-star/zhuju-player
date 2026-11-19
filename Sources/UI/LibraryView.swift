@@ -55,6 +55,7 @@ struct LibraryView: View {
             }
         }
         .navigationViewStyle(.stack)
+        .onAppear { Boot.mark("C library.view") }
     }
 
     private var list: some View {

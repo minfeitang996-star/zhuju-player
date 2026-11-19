@@ -4,6 +4,11 @@ import SwiftUI
 struct ZhuJuApp: App {
     @StateObject private var library = MediaLibrary()
 
+    init() {
+        Boot.mark("A app.init")
+    }
+
+
     var body: some Scene {
         WindowGroup {
             LibraryView()
