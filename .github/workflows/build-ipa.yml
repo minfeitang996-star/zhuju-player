@@ -16,7 +16,6 @@ jobs:
       - name: Show toolchain
         run: |
           sw_vers
-          ls /Applications | grep -i xcode
           sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
 
@@ -26,19 +25,29 @@ jobs:
           xcodegen --version
           pod --version
 
+      - name: Cache whisper.xcframework
+        id: whispercache
+        uses: actions/cache@v4
+        with:
+          path: ThirdParty/whisper.xcframework
+          key: whisper-xcframework-v1
+
       - name: Build whisper.xcframework
+        if: steps.whispercache.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git whisper-src
           cd whisper-src
           chmod +x build-xcframework.sh
           ./build-xcframework.sh
-          ls -la build-apple
           mkdir -p "$GITHUB_WORKSPACE/ThirdParty"
           rm -rf "$GITHUB_WORKSPACE/ThirdParty/whisper.xcframework"
           cp -R build-apple/whisper.xcframework "$GITHUB_WORKSPACE/ThirdParty/"
+          ls -la "$GITHUB_WORKSPACE/ThirdParty/whisper.xcframework"
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          ls -d ThirdParty/whisper.xcframework
+          xcodegen generate
 
       - name: CocoaPods install
         run: pod install --repo-update
@@ -66,7 +75,6 @@ jobs:
           mkdir -p Payload
           cp -R "$APP" Payload/
           codesign --force --deep --sign - Payload/ZhuJu.app
-          codesign -dv Payload/ZhuJu.app 2>&1 | head -5 || true
           zip -qry ZhuJu.ipa Payload
           ls -lh ZhuJu.ipa
 

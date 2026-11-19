@@ -151,8 +151,8 @@ final class VLCAudioRipper: NSObject {
             guard let self else { return }
             if self.player.isPlaying {
                 self.started = true
-                let length = self.player.media?.length?.intValue ?? 0
-                let current = self.player.time?.intValue ?? 0
+                let length = self.player.media?.length.intValue ?? 0
+                let current = self.player.time.intValue
                 if length > 0 {
                     self.progressHandler?(min(1.0, Double(current) / Double(length)))
                 }

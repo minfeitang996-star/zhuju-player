@@ -34,8 +34,8 @@ final class PlayerController: ObservableObject {
             guard let self else { return }
             self.playing = self.player.isPlaying
             self.position = self.player.position
-            self.timeText = Self.format(self.player.time?.intValue ?? 0)
-            self.lengthText = Self.format(self.player.media?.length?.intValue ?? 0)
+            self.timeText = Self.format(self.player.time.intValue)
+            self.lengthText = Self.format(self.player.media?.length.intValue ?? 0)
         }
     }
 
