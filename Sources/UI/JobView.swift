@@ -13,11 +13,25 @@ struct JobView: View {
     @State private var translate: Bool = true
     @State private var running = false
 
-    private let languages: [(String, String)] = [
-        ("auto", "自动检测"),
-        ("en", "英语"), ("ja", "日语"), ("ko", "韩语"), ("zh", "中文"),
-        ("ru", "俄语"), ("fr", "法语"), ("de", "德语"), ("es", "西语"),
-        ("it", "意语"), ("pt", "葡语"), ("th", "泰语"), ("vi", "越南语")
+    private struct LangOption: Identifiable {
+        let id: String
+        let name: String
+    }
+
+    private let languages: [LangOption] = [
+        LangOption(id: "auto", name: "自动检测"),
+        LangOption(id: "en", name: "英语"),
+        LangOption(id: "ja", name: "日语"),
+        LangOption(id: "ko", name: "韩语"),
+        LangOption(id: "zh", name: "中文"),
+        LangOption(id: "ru", name: "俄语"),
+        LangOption(id: "fr", name: "法语"),
+        LangOption(id: "de", name: "德语"),
+        LangOption(id: "es", name: "西语"),
+        LangOption(id: "it", name: "意语"),
+        LangOption(id: "pt", name: "葡语"),
+        LangOption(id: "th", name: "泰语"),
+        LangOption(id: "vi", name: "越南语")
     ]
 
     var body: some View {
@@ -35,8 +49,8 @@ struct JobView: View {
 
                 Section("视频语言") {
                     Picker("语言", selection: $language) {
-                        ForEach(languages, id: \.0) { pair in
-                            Text(pair.1).tag(pair.0)
+                        ForEach(languages) { option in
+                            Text(option.name).tag(option.id)
                         }
                     }
                 }
