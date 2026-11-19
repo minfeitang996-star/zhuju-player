@@ -11,11 +11,16 @@ final class PlayerController: ObservableObject {
     @Published var timeText = "00:00"
     @Published var lengthText = "00:00"
     @Published var subtitlesEnabled = true
+    @Published var rate: Float = 1.0
 
     private var timer: Timer?
     private var videoURL: URL?
     private var subtitleURL: URL?
     fileprivate var timerLogged = false
+
+    init() {
+        rate = Float(UserDefaults.standard.object(forKey: "playerRate") as? Double ?? 1.0)
+    }
 
     deinit {
         timer?.invalidate()
@@ -33,6 +38,9 @@ final class PlayerController: ObservableObject {
         Boot.mark("F media.assigned")
         player.play()
         Boot.mark("G play.called")
+        player.rate = rate
+        UIApplication.shared.isIdleTimerDisabled = true
+        restoreResume(after: 1.2)
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
@@ -45,12 +53,22 @@ final class PlayerController: ObservableObject {
             self.position = self.player.position
             self.timeText = Self.format(self.player.time.intValue)
             self.lengthText = Self.format(self.player.media?.length.intValue ?? 0)
+
+            let length = self.player.media?.length.intValue ?? 0
+            if length > 0, self.player.position >= 0.995 {
+                if let url = self.videoURL {
+                    UserDefaults.standard.removeObject(forKey: "resume:\(url.lastPathComponent)")
+                }
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
         }
     }
 
     func close() {
         timer?.invalidate()
         timer = nil
+        saveResume()
+        UIApplication.shared.isIdleTimerDisabled = false
         player.stop()
     }
 
@@ -104,6 +122,28 @@ final class PlayerController: ObservableObject {
             media.addOption(":no-sub-autodetect-file")
         }
         return media
+    }
+
+    func setRate(_ value: Float) {
+        rate = value
+        player.rate = value
+        UserDefaults.standard.set(Double(value), forKey: "playerRate")
+        Boot.mark("M rate \(value)")
+    }
+
+    func saveResume() {
+        guard let videoURL else { return }
+        UserDefaults.standard.set(Double(player.position), forKey: "resume:\(videoURL.lastPathComponent)")
+    }
+
+    private func restoreResume(after delay: Double) {
+        guard let videoURL else { return }
+        let saved = UserDefaults.standard.double(forKey: "resume:\(videoURL.lastPathComponent)")
+        guard saved > 0.01, saved < 0.99 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.player.position = Float(saved)
+            Boot.mark("L resume \(Int(saved * 100))%")
+        }
     }
 
     static func format(_ milliseconds: Int32) -> String {
@@ -248,7 +288,7 @@ struct PlayerScreen: View {
                     .foregroundColor(.white.opacity(0.8))
             }
 
-            HStack(spacing: 26) {
+            HStack(spacing: 20) {
                 Button {
                     controller.skip(-10)
                 } label: {
@@ -283,6 +323,8 @@ struct PlayerScreen: View {
 
                 aspectMenu
 
+                speedMenu
+
                 Button {
                     controller.toggleSubtitles()
                 } label: {
@@ -316,6 +358,22 @@ struct PlayerScreen: View {
         } label: {
             Image(systemName: "aspectratio")
                 .font(.system(size: 20))
+                .foregroundColor(.white.opacity(0.9))
+        }
+    }
+
+    private var speedMenu: some View {
+        Menu {
+            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { value in
+                Button {
+                    controller.setRate(Float(value))
+                } label: {
+                    Text((abs(controller.rate - Float(value)) < 0.01 ? "✓ " : "") + String(format: "%g×", value))
+                }
+            }
+        } label: {
+            Image(systemName: "speedometer")
+                .font(.system(size: 18))
                 .foregroundColor(.white.opacity(0.9))
         }
     }
