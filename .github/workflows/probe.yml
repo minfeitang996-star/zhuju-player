@@ -1,0 +1,25 @@
+name: Probe Runners
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/probe.yml'
+
+jobs:
+  m15:
+    runs-on: macos-15
+    steps:
+      - run: sw_vers
+  m15intel:
+    runs-on: macos-15-intel
+    steps:
+      - run: sw_vers
+  m13:
+    runs-on: macos-13
+    steps:
+      - run: sw_vers
+  m14large:
+    runs-on: macos-14-large
+    steps:
+      - run: sw_vers
