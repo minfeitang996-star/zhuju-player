@@ -29,7 +29,8 @@ targets:
       - path: Sources
     dependencies:
       - framework: ThirdParty/whisper.xcframework
-        embed: false
+        embed: true
+        codeSign: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.zhuju.player

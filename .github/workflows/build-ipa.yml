@@ -74,7 +74,26 @@ jobs:
           test -d "$APP"
           mkdir -p Payload
           cp -R "$APP" Payload/
-          codesign --force --deep --sign - Payload/ZhuJu.app
+          echo "===== embedded frameworks ====="
+          ls -la Payload/ZhuJu.app/Frameworks || true
+          echo "===== dyld deps check ====="
+          MISS=0
+          for dep in $(otool -L Payload/ZhuJu.app/ZhuJu | grep "@rpath" | awk '{print $1}'); do
+            name=$(echo "$dep" | sed 's|@rpath/||')
+            if [ ! -e "Payload/ZhuJu.app/Frameworks/$name" ]; then
+              echo "MISSING: $name"
+              MISS=1
+            else
+              echo "OK: $name"
+            fi
+          done
+          if [ "$MISS" != "0" ]; then echo "动态库缺失，包一定闪退，中止"; exit 1; fi
+          for fw in Payload/ZhuJu.app/Frameworks/*.framework; do
+            [ -d "$fw" ] && codesign --force --sign - "$fw"
+          done
+          codesign --force --sign - Payload/ZhuJu.app
+          echo "===== final signature ====="
+          codesign -dv --verbose=4 Payload/ZhuJu.app 2>&1 || true
           zip -qry ZhuJu.ipa Payload
           ls -lh ZhuJu.ipa
 
