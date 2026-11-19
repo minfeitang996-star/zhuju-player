@@ -7,22 +7,24 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Show toolchain
         run: |
-          ls /Applications | grep Xcode
-          sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          sw_vers
+          ls /Applications | grep -i xcode
+          sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
 
       - name: Install build tools
         run: |
           brew install xcodegen cmake cocoapods || true
-          which xcodegen pod cmake
+          xcodegen --version
+          pod --version
 
       - name: Build whisper.xcframework
         run: |
@@ -30,19 +32,16 @@ jobs:
           cd whisper-src
           chmod +x build-xcframework.sh
           ./build-xcframework.sh
-          ls -la build-apple/
+          ls -la build-apple
           mkdir -p "$GITHUB_WORKSPACE/ThirdParty"
           rm -rf "$GITHUB_WORKSPACE/ThirdParty/whisper.xcframework"
           cp -R build-apple/whisper.xcframework "$GITHUB_WORKSPACE/ThirdParty/"
 
       - name: Generate Xcode project
-        run: |
-          xcodegen generate
-          ls -la
+        run: xcodegen generate
 
       - name: CocoaPods install
-        run: |
-          pod install --repo-update --verbose
+        run: pod install --repo-update
 
       - name: Build app
         run: |
@@ -58,15 +57,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             ENABLE_BITCODE=NO \
-            build 2>&1 | tee build.log | tail -n 200
+            build 2>&1 | tee build.log | tail -n 300
 
       - name: Package IPA
         run: |
           APP="build/Build/Products/Release-iphoneos/ZhuJu.app"
-          if [ ! -d "$APP" ]; then echo "app not found"; ls -R build/Build/Products | head -50; exit 1; fi
+          test -d "$APP"
           mkdir -p Payload
           cp -R "$APP" Payload/
-          codesign --force --deep --sign - Payload/ZhuJu.app || true
+          codesign --force --deep --sign - Payload/ZhuJu.app
           codesign -dv Payload/ZhuJu.app 2>&1 | head -5 || true
           zip -qry ZhuJu.ipa Payload
           ls -lh ZhuJu.ipa
@@ -78,10 +77,11 @@ jobs:
           path: ZhuJu.ipa
           retention-days: 30
 
-      - name: Upload build log on failure
-        if: failure()
+      - name: Upload build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
           path: build.log
+          if-no-files-found: ignore
           retention-days: 7
