@@ -15,6 +15,7 @@ final class PlayerController: ObservableObject {
     private var timer: Timer?
     private var videoURL: URL?
     private var subtitleURL: URL?
+    fileprivate var timerLogged = false
 
     deinit {
         timer?.invalidate()
@@ -25,13 +26,21 @@ final class PlayerController: ObservableObject {
         subtitleURL = subtitle
         subtitlesEnabled = subtitle != nil
 
+        Boot.mark("D player.open \(video.lastPathComponent)")
         let media = makeMedia(url: video, subtitle: subtitle)
+        Boot.mark("E media.made")
         player.media = media
+        Boot.mark("F media.assigned")
         player.play()
+        Boot.mark("G play.called")
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             guard let self else { return }
+            if !self.timerLogged {
+                self.timerLogged = true
+                Boot.mark("H tick playing=\(self.player.isPlaying)")
+            }
             self.playing = self.player.isPlaying
             self.position = self.player.position
             self.timeText = Self.format(self.player.time.intValue)
@@ -122,6 +131,11 @@ struct PlayerScreen: View {
     @StateObject private var controller = PlayerController()
     @State private var showJob = false
     @State private var showControls = true
+
+    init(item: MediaItem) {
+        self.item = item
+        Boot.mark("D0 player.screen.init")
+    }
 
     var body: some View {
         ZStack {
