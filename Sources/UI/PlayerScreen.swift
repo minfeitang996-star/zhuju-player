@@ -131,6 +131,7 @@ struct PlayerScreen: View {
     @StateObject private var controller = PlayerController()
     @State private var showJob = false
     @State private var showControls = true
+    @State private var isFullscreen = false
 
     init(item: MediaItem) {
         self.item = item
@@ -161,11 +162,16 @@ struct PlayerScreen: View {
             }
         }
         .statusBarHidden(true)
+        .onTapGesture(count: 2) { toggleFullscreen() }
         .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() } }
         .onAppear {
             controller.open(video: item.url, subtitle: item.subtitleURL)
         }
-        .onDisappear { controller.close() }
+        .onDisappear {
+            controller.close()
+            isFullscreen = false
+            OrientationHelper.apply(.portrait)
+        }
         .sheet(isPresented: $showJob, onDismiss: { library.reload() }) {
             JobView(videoURL: item.url)
         }
@@ -229,7 +235,7 @@ struct PlayerScreen: View {
                     .foregroundColor(.white.opacity(0.8))
             }
 
-            HStack(spacing: 44) {
+            HStack(spacing: 34) {
                 Button {
                     controller.seek(to: max(0, controller.position - 0.02))
                 } label: {
@@ -255,6 +261,14 @@ struct PlayerScreen: View {
                 }
 
                 Button {
+                    toggleFullscreen()
+                } label: {
+                    Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+
+                Button {
                     controller.toggleSubtitles()
                 } label: {
                     Image(systemName: controller.subtitlesEnabled ? "captions.bubble.fill" : "captions.bubble")
@@ -266,5 +280,14 @@ struct PlayerScreen: View {
             .padding(.bottom, 18)
         }
         .padding(.horizontal, 16)
+    }
+
+    private func toggleFullscreen() {
+        isFullscreen.toggle()
+        Boot.mark("I fullscreen=\(isFullscreen)")
+        OrientationHelper.apply(isFullscreen ? .landscapeRight : .portrait)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showControls = !isFullscreen
+        }
     }
 }
