@@ -1,0 +1,14 @@
+﻿name: probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello-ubuntu
+  mac:
+    runs-on: macos-14
+    steps:
+      - run: sw_vers
