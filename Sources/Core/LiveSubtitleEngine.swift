@@ -159,6 +159,12 @@ final class LiveSubtitleEngine: ObservableObject {
             return
         }
 
+        // 原片就是中文、目标也是中文，就不用再翻译一遍，省时间也更干净
+        if engine.lastLanguage == "zh" && Prefs.translateTarget.contains("中文") {
+            DispatchQueue.main.async { self.status = "原片是中文，直接显示原文" }
+            return
+        }
+
         Task { [weak self] in
             guard let self else { return }
             do {

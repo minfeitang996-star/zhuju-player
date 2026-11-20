@@ -13,6 +13,10 @@ struct PlaybackSettingsView: View {
     @AppStorage("keepRate") private var keepRate: Bool = true
     @AppStorage("bgAudio") private var bgAudio: Bool = false
 
+    @AppStorage("translateTarget") private var translateTarget: String = "简体中文"
+
+    private let targets: [String] = ["简体中文", "繁体中文", "英语", "日语", "韩语", "俄语", "法语", "德语", "西班牙语", "阿拉伯语", "泰语", "越南语"]
+
     @State private var cleared = false
 
     private let seconds: [Double] = [5, 10, 15, 20, 30, 60]
@@ -46,6 +50,18 @@ struct PlaybackSettingsView: View {
                 Text("屏幕方向")
             } footer: {
                 Text("选「横向全屏」后，一进播放页就自动横过来。")
+            }
+
+            Section {
+                Picker("翻译目标语言", selection: $translateTarget) {
+                    ForEach(targets, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+            } header: {
+                Text("翻译")
+            } footer: {
+                Text("生成字幕、边看边译、麦克风同传，都翻成这里选的语言。原文本来就是中文时不重复翻译，只关闭联调用。")
             }
 
             Section {

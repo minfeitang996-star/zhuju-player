@@ -225,7 +225,7 @@ final class LiveTranslator: ObservableObject {
         }
 
         let config = TranslatorConfig.load()
-        if config.isUsable {
+        if config.isUsable && !(whisper.lastLanguage == "zh" && Prefs.translateTarget.contains("中文")) {
             Task { [weak self] in
                 guard let self else { return }
                 var translated: String?

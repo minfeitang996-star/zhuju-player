@@ -6,6 +6,8 @@ final class WhisperEngine {
 
     private var ctx: OpaquePointer?
     var fastMode: Bool = true
+    /// 上一次识别时 whisper 判定的语种（zh / en / ja …）
+    private(set) var lastLanguage: String?
 
     private static var cachePath: String?
     private static var cacheEngine: WhisperEngine?
@@ -88,6 +90,11 @@ final class WhisperEngine {
         }
 
         guard code == 0 else { return }
+
+        let languageID = whisper_full_lang_id(ctx)
+        if languageID >= 0, let name = whisper_lang_str(languageID) {
+            lastLanguage = String(cString: name)
+        }
 
         let count = whisper_full_n_segments(ctx)
         guard count > 0 else { return }

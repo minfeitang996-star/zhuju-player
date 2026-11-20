@@ -14,7 +14,7 @@ struct TranslatorConfig {
             baseURL: defaults.string(forKey: "apiBase") ?? "",
             apiKey: defaults.string(forKey: "apiKey") ?? "",
             model: defaults.string(forKey: "apiModel") ?? "deepseek-chat",
-            targetLanguage: "简体中文"
+            targetLanguage: Prefs.translateTarget
         )
     }
 

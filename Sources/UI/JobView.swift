@@ -14,6 +14,7 @@ struct JobView: View {
     @State private var running = false
     @AppStorage("bgConvert") private var bgConvert: Bool = true
     @AppStorage("fastASR") private var fastASR: Bool = true
+    @AppStorage("translateTarget") private var translateTarget: String = "简体中文"
 
     private struct LangOption: Identifiable {
         let id: String
@@ -69,7 +70,7 @@ struct JobView: View {
                 }
 
                 Section {
-                    Toggle("翻译成简体中文", isOn: $translate)
+                    Toggle("翻译成\(translateTarget)", isOn: $translate)
                 } footer: {
                     if TranslatorConfig.load().isUsable {
                         Text("翻译走你配置的接口，字幕会变成中文。")
