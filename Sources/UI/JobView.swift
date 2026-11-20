@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 
 struct JobView: View {
 
@@ -12,6 +12,7 @@ struct JobView: View {
     @State private var language: String = "auto"
     @State private var translate: Bool = true
     @State private var running = false
+    @AppStorage("bgConvert") private var bgConvert: Bool = true
 
     private struct LangOption: Identifiable {
         let id: String
@@ -65,6 +66,12 @@ struct JobView: View {
                     }
                 }
 
+                Section {
+                    Toggle("后台转字幕（切走也继续跑）", isOn: $bgConvert)
+                } footer: {
+                    Text("开着就可以切到微信、浏览器，锁屏也行，识别会一直跑到完。转完回来看列表里那条视频，字幕已经挂上。")
+                }
+
                 if running || job.finished || job.errorText != nil {
                     Section("进度") {
                         VStack(alignment: .leading, spacing: 10) {
@@ -86,6 +93,11 @@ struct JobView: View {
                                 Text("已生成 \(job.cueCount) 条")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
+                            }
+                            if running && bgConvert {
+                                Label("后台保活中：可以切到别的 App，也可以锁屏", systemImage: "waveform")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(red: 0.45, green: 0.85, blue: 0.55))
                             }
                         }
                         .padding(.vertical, 4)

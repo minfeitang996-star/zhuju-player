@@ -47,9 +47,15 @@ final class SubtitleJob: ObservableObject {
 
         guard !isRunning else { return }
         isRunning = true
-        defer { isRunning = false }
 
         reset()
+        if Prefs.bgConvert {
+            BackgroundKeeper.shared.start()
+        }
+        defer {
+            BackgroundKeeper.shared.stop()
+            isRunning = false
+        }
 
         do {
             guard let modelURL = ModelManager.shared.localURL(modelID) else {
