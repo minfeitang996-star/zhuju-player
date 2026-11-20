@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import AVFoundation
 import Combine
 
@@ -89,9 +89,13 @@ final class LiveTranslator: ObservableObject {
     private func beginAudio(format: AVAudioFormat) {
         let session = AVAudioSession.sharedInstance()
         do {
+            // 只用手机内置麦克风拾音，输出保持 A2DP，戴蓝牙耳机也能边听边识别
             try session.setCategory(.playAndRecord, mode: .default,
-                                    options: [.defaultToSpeaker, .mixWithOthers, .allowBluetooth])
+                                    options: [.defaultToSpeaker, .mixWithOthers, .allowBluetoothA2DP])
             try session.setActive(true)
+            if let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+                try? session.setPreferredInput(builtIn)
+            }
 
             let input = engine.inputNode
             let inFormat = input.inputFormat(forBus: 0)

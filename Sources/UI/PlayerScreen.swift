@@ -43,6 +43,14 @@ final class PlayerController: ObservableObject {
         player.rate = Prefs.keepRate ? rate : 1.0
         if !Prefs.keepRate { rate = 1.0 }
         UIApplication.shared.isIdleTimerDisabled = true
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .moviePlayback,
+                                    options: [.allowBluetoothA2DP, .allowAirPlay])
+            try session.setActive(true)
+        } catch {
+            NSLog("ZhuJu audio.session failed \(error)")
+        }
         if Prefs.backgroundAudio {
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try? AVAudioSession.sharedInstance().setActive(true)
