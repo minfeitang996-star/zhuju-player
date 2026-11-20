@@ -270,7 +270,7 @@ struct PlayerScreen: View {
 
             if liveOn && liveSub.cues.isEmpty {
                 VStack {
-                    Text(liveSub.status)
+                    Text("\(liveSub.status) · 已识别 \(liveSub.cues.count) 段 · 位置 \(Int(currentSeconds))s")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                         .padding(.horizontal, 10)
@@ -503,15 +503,22 @@ struct PlayerScreen: View {
     }
 
     private var currentSeconds: Double {
+        let ms = controller.player.time.intValue
+        if ms > 0 { return Double(ms) / 1000.0 }
         let length = Double(controller.player.media?.length.intValue ?? 0) / 1000
-        guard length > 0 else { return 0 }
-        return Double(controller.player.position) * length
+        if length > 0 { return Double(controller.player.position) * length }
+        return 0
     }
 
     private var activeLiveCue: LiveCue? {
+        guard !liveSub.cues.isEmpty else { return nil }
         let position = currentSeconds
-        guard position > 0 else { return nil }
-        return liveSub.cues.last(where: { $0.start <= position + 3.0 && position <= $0.end + 8 })
+        // 拿不到进度时也不藏字，直接显示最新识别结果
+        if position <= 0 { return liveSub.cues.last }
+        let candidates = liveSub.cues.filter { $0.start <= position + 4.0 }
+        guard let last = candidates.last else { return nil }
+        if position > last.end + 12 { return nil }
+        return last
     }
 
     private func toggleLive() {
@@ -526,7 +533,9 @@ struct PlayerScreen: View {
             return
         }
         liveOn = true
-        liveSub.start(videoURL: item.url, modelPath: modelURL.path) { [controller] in
+        liveSub.start(videoURL: item.url, modelPath: modelURL.path, from: currentSeconds) { [controller] in
+            let ms = controller.player.time.intValue
+            if ms > 0 { return Double(ms) / 1000.0 }
             let length = Double(controller.player.media?.length.intValue ?? 0) / 1000
             guard length > 0 else { return 0 }
             return Double(controller.player.position) * length

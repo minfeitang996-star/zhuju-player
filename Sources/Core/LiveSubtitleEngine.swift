@@ -24,12 +24,15 @@ final class LiveSubtitleEngine: ObservableObject {
 
     private let chunkSeconds: Double = 6
 
-    func start(videoURL: URL, modelPath: String, playhead: @escaping () -> Double) {
+    private var startOffset: Double = 0
+
+    func start(videoURL: URL, modelPath: String, from: Double = 0, playhead: @escaping () -> Double) {
         guard !running else { return }
         running = true
         stopFlag = false
         cues = []
         status = "准备中…"
+        startOffset = max(0, from - 2)
         self.playhead = playhead
 
         queue.async { [weak self] in
@@ -39,7 +42,11 @@ final class LiveSubtitleEngine: ObservableObject {
                 DispatchQueue.main.async { self.status = "边看边译中" }
                 try self.pipeline(engine: engine, url: videoURL)
                 DispatchQueue.main.async {
-                    if !self.stopFlag { self.status = "本片已全部译完" }
+                    if !self.stopFlag {
+                        self.status = self.cues.isEmpty
+                            ? "跑完了但没识别到语音（这段可能是纯音乐）"
+                            : "本片已全部译完"
+                    }
                     self.running = false
                 }
             } catch {
@@ -77,15 +84,27 @@ final class LiveSubtitleEngine: ObservableObject {
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
         output.alwaysCopiesSampleData = false
         reader.add(output)
+
+        let begin = max(0, startOffset)
+        if begin > 1 {
+            reader.timeRange = CMTimeRange(start: CMTime(seconds: begin, preferredTimescale: 1000),
+                                           duration: .positiveInfinity)
+        }
         reader.startReading()
 
         let windowSamples = Int(chunkSeconds * 16_000)
         var buffer: [Float] = []
-        var windowStart: Double = 0
+        var windowStart: Double = begin
 
         while reader.status == .reading && !stopFlag {
-            // 只跑到播放位置后面 40 秒，不提前把整部片算完
-            while playhead() + 40 < windowStart && !stopFlag {
+            // 只跑到播放位置后面 40 秒，不提前把整部片算完；
+            // 播放位置拿不到时（head<=1）不阻塞，先继续读
+            var guardCount = 0
+            while !stopFlag {
+                let head = playhead()
+                if head <= 1 || head + 40 >= windowStart { break }
+                guardCount += 1
+                if guardCount > 400 { break }
                 Thread.sleep(forTimeInterval: 0.25)
             }
             if stopFlag { reader.cancelReading(); return }
