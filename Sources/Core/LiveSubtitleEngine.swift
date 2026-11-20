@@ -25,14 +25,17 @@ final class LiveSubtitleEngine: ObservableObject {
     private let chunkSeconds: Double = 6
 
     private var startOffset: Double = 0
+    private var sourceLanguage: String?
 
-    func start(videoURL: URL, modelPath: String, from: Double = 0, playhead: @escaping () -> Double) {
+    func start(videoURL: URL, modelPath: String, from: Double = 0,
+               language: String? = nil, playhead: @escaping () -> Double) {
         guard !running else { return }
         running = true
         stopFlag = false
         cues = []
         status = "准备中…"
         startOffset = max(0, from - 2)
+        sourceLanguage = language
         self.playhead = playhead
 
         queue.async { [weak self] in
@@ -133,7 +136,7 @@ final class LiveSubtitleEngine: ObservableObject {
     private func recognize(engine: WhisperEngine, slice: [Float], start: Double) {
         var parts: [SubtitleCue] = []
         let lock = NSLock()
-        engine.transcribe(samples: slice, offset: start, language: nil) { cue in
+        engine.transcribe(samples: slice, offset: start, language: sourceLanguage) { cue in
             lock.lock()
             parts.append(cue)
             lock.unlock()

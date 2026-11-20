@@ -203,7 +203,7 @@ struct PlayerScreen: View {
     @EnvironmentObject private var library: MediaLibrary
 
     @StateObject private var controller = PlayerController()
-    @State private var showJob = false
+    @State private var activeSheet: PlayerSheet?
     @State private var showControls = true
     @State private var isFullscreen = false
     @State private var hideTask: Task<Void, Never>?
@@ -211,6 +211,12 @@ struct PlayerScreen: View {
     @StateObject private var liveSub = LiveSubtitleEngine()
     @State private var liveOn = false
     @State private var noModelAlert = false
+
+    private enum PlayerSheet: String, Identifiable {
+        case job
+        case liveSettings
+        var id: String { rawValue }
+    }
     @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fill") ?? .fill
     @State private var videoSafeArea: Bool = UserDefaults.standard.object(forKey: "videoSafeArea") as? Bool ?? false
 
@@ -268,9 +274,9 @@ struct PlayerScreen: View {
                 .allowsHitTesting(false)
             }
 
-            if liveOn && liveSub.cues.isEmpty {
+            if liveOn {
                 VStack {
-                    Text("\(liveSub.status) · 已识别 \(liveSub.cues.count) 段 · 位置 \(Int(currentSeconds))s")
+                    Text("\(livePairText) · \(liveSub.status) · 已识别 \(liveSub.cues.count) 段")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                         .padding(.horizontal, 10)
@@ -333,8 +339,16 @@ struct PlayerScreen: View {
             isFullscreen = false
             OrientationHelper.apply(.portrait)
         }
-        .sheet(isPresented: $showJob, onDismiss: { library.reload() }) {
-            JobView(videoURL: item.url)
+        .sheet(item: $activeSheet, onDismiss: {
+            library.reload()
+            restartLive()
+        }) { sheet in
+            switch sheet {
+            case .job:
+                JobView(videoURL: item.url)
+            case .liveSettings:
+                LiveSettingsView()
+            }
         }
     }
 
@@ -366,7 +380,7 @@ struct PlayerScreen: View {
             Spacer()
 
             Button {
-                showJob = true
+                activeSheet = .job
             } label: {
                 Label("生成字幕", systemImage: "wand.and.stars")
                     .font(.system(size: 13, weight: .semibold))
@@ -457,6 +471,14 @@ struct PlayerScreen: View {
                         .font(.system(size: 19))
                         .foregroundColor(liveOn ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.9))
                 }
+
+                Button {
+                    activeSheet = .liveSettings
+                } label: {
+                    Image(systemName: "globe")
+                        .font(.system(size: 19))
+                        .foregroundColor(.white.opacity(0.9))
+                }
             }
             .padding(.bottom, 18)
         }
@@ -533,12 +555,40 @@ struct PlayerScreen: View {
             return
         }
         liveOn = true
-        liveSub.start(videoURL: item.url, modelPath: modelURL.path, from: currentSeconds) { [controller] in
+        liveSub.start(videoURL: item.url,
+                      modelPath: modelURL.path,
+                      from: currentSeconds,
+                      language: Prefs.liveSource == "auto" ? nil : Prefs.liveSource) { [controller] in
             let ms = controller.player.time.intValue
             if ms > 0 { return Double(ms) / 1000.0 }
             let length = Double(controller.player.media?.length.intValue ?? 0) / 1000
             guard length > 0 else { return 0 }
             return Double(controller.player.position) * length
+        }
+    }
+
+    private var livePairText: String {
+        let source: String
+        switch Prefs.liveSource {
+        case "ja": source = "日语"
+        case "en": source = "英语"
+        case "zh": source = "中文"
+        case "ko": source = "韩语"
+        case "ru": source = "俄语"
+        case "fr": source = "法语"
+        case "de": source = "德语"
+        case "es": source = "西语"
+        default: source = "自动检测"
+        }
+        return "\(source) → \(Prefs.translateTarget)"
+    }
+
+    private func restartLive() {
+        guard liveOn else { return }
+        liveSub.stop()
+        liveOn = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            toggleLive()
         }
     }
 
