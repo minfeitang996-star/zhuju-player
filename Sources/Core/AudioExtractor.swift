@@ -106,7 +106,7 @@ enum AudioExtractor {
         return rms < 0.002
     }
 
-    private static func floats(from sampleBuffer: CMSampleBuffer) -> [Float]? {
+    static func floats(from sampleBuffer: CMSampleBuffer) -> [Float]? {
         guard let block = CMSampleBufferGetDataBuffer(sampleBuffer) else { return nil }
         let length = CMBlockBufferGetDataLength(block)
         guard length > 0 else { return nil }

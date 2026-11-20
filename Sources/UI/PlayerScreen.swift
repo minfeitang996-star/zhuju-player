@@ -200,6 +200,9 @@ struct PlayerScreen: View {
     @State private var isFullscreen = false
     @State private var hideTask: Task<Void, Never>?
     @State private var layoutTick = 0
+    @StateObject private var liveSub = LiveSubtitleEngine()
+    @State private var liveOn = false
+    @State private var noModelAlert = false
     @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fill") ?? .fill
     @State private var videoSafeArea: Bool = UserDefaults.standard.object(forKey: "videoSafeArea") as? Bool ?? false
 
@@ -231,6 +234,47 @@ struct PlayerScreen: View {
                         }
                 )
 
+            if liveOn, let liveCue = activeLiveCue {
+                VStack {
+                    Spacer()
+                    VStack(spacing: 5) {
+                        if let translated = liveCue.translated, !translated.isEmpty {
+                            Text(translated)
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                        }
+                        Text(liveCue.original)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(Color.black.opacity(0.62))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, showControls ? 132 : 46)
+                }
+                .allowsHitTesting(false)
+            }
+
+            if liveOn && liveSub.cues.isEmpty {
+                VStack {
+                    Text(liveSub.status)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.8))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.5))
+                        .clipShape(Capsule())
+                    Spacer()
+                }
+                .padding(.top, 56)
+                .allowsHitTesting(false)
+            }
+
             if showControls {
                 VStack(spacing: 0) {
                     topBar
@@ -250,6 +294,11 @@ struct PlayerScreen: View {
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
+        .alert("还没下载识别模型", isPresented: $noModelAlert) {
+            Button("知道了", role: .cancel) { }
+        } message: {
+            Text("去设置里下载一个识别模型（推荐 base），回来再点这个按钮就能边看边译。")
+        }
         .onReceive(Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()) { _ in
             layoutTick += 1
         }
@@ -271,6 +320,7 @@ struct PlayerScreen: View {
             scheduleHide()
         }
         .onDisappear {
+            liveSub.stop()
             controller.close()
             isFullscreen = false
             OrientationHelper.apply(.portrait)
@@ -391,6 +441,14 @@ struct PlayerScreen: View {
                         .foregroundColor(controller.subtitlesEnabled ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.55))
                 }
                 .disabled(item.subtitleURL == nil)
+
+                Button {
+                    toggleLive()
+                } label: {
+                    Image(systemName: liveOn ? "text.bubble.fill" : "text.bubble")
+                        .font(.system(size: 19))
+                        .foregroundColor(liveOn ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.9))
+                }
             }
             .padding(.bottom, 18)
         }
@@ -433,6 +491,37 @@ struct PlayerScreen: View {
             Image(systemName: "speedometer")
                 .font(.system(size: 18))
                 .foregroundColor(.white.opacity(0.9))
+        }
+    }
+
+    private var currentSeconds: Double {
+        let length = Double(controller.player.media?.length.intValue ?? 0) / 1000
+        guard length > 0 else { return 0 }
+        return Double(controller.player.position) * length
+    }
+
+    private var activeLiveCue: LiveCue? {
+        let position = currentSeconds
+        guard position > 0 else { return nil }
+        return liveSub.cues.last(where: { $0.start <= position + 3.0 && position <= $0.end + 8 })
+    }
+
+    private func toggleLive() {
+        if liveOn {
+            liveSub.stop()
+            liveOn = false
+            return
+        }
+        let modelID = UserDefaults.standard.string(forKey: "modelID") ?? "ggml-base.bin"
+        guard let modelURL = ModelManager.shared.localURL(modelID) else {
+            noModelAlert = true
+            return
+        }
+        liveOn = true
+        liveSub.start(videoURL: item.url, modelPath: modelURL.path) { [controller] in
+            let length = Double(controller.player.media?.length.intValue ?? 0) / 1000
+            guard length > 0 else { return 0 }
+            return Double(controller.player.position) * length
         }
     }
 

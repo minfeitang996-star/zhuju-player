@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 
 struct LiveView: View {
 
@@ -25,7 +25,7 @@ struct LiveView: View {
                     controlBar
                 }
             }
-            .navigationTitle("实时同传")
+            .navigationTitle("麦克风同传")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
