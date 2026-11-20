@@ -7,6 +7,7 @@ struct LibraryView: View {
 
     @State private var showImporter = false
     @State private var showSettings = false
+    @State private var showLive = false
     @State private var selected: MediaItem?
     @State private var importErrors: String?
     @State private var showErrors = false
@@ -31,13 +32,21 @@ struct LibraryView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showImporter = true } label: {
-                        Image(systemName: "plus.circle.fill")
+                    HStack(spacing: 14) {
+                        Button { showLive = true } label: {
+                            Image(systemName: "waveform")
+                        }
+                        Button { showImporter = true } label: {
+                            Image(systemName: "plus.circle.fill")
+                        }
                     }
                 }
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $showLive) {
+                LiveView()
             }
             .fileImporter(isPresented: $showImporter,
                           allowedContentTypes: [.movie, .video, .audiovisualContent, .data],

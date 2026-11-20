@@ -10,7 +10,7 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     IPHONEOS_DEPLOYMENT_TARGET: "16.4"
-    MARKETING_VERSION: "1.3.1"
+    MARKETING_VERSION: "1.4.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: ""
@@ -55,6 +55,7 @@ targets:
         LSRequiresIPhoneOS: true
         UIBackgroundModes:
           - audio
+        NSMicrophoneUsageDescription: 用来拾取外放里的人在说话，实时识别并翻译成中文字幕。音频不保存、不上传，识别完全在本机完成。
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         UISupportedInterfaceOrientations:
