@@ -9,6 +9,9 @@ struct LiveSettingsView: View {
     @AppStorage("sourceLangPref") private var source: String = "auto"
     @AppStorage("translateTarget") private var target: String = "简体中文"
     @AppStorage("modelID") private var modelID: String = "ggml-base.bin"
+    @AppStorage("translateEngine") private var engine: String = "auto"
+    @State private var testing = false
+    @State private var testResult = ""
 
     private let sources: [(id: String, name: String)] = [
         ("auto", "自动检测"), ("ja", "日语"), ("en", "英语"), ("zh", "中文"),
@@ -42,6 +45,32 @@ struct LiveSettingsView: View {
                 }
 
                 Section {
+                    Picker("翻译通道", selection: $engine) {
+                        Text("自动（免费优先）").tag("auto")
+                        Text("内置免费通道").tag("free")
+                        Text("自配接口（DeepSeek）").tag("api")
+                    }
+                    Button {
+                        runTest()
+                    } label: {
+                        HStack {
+                            Text(testing ? "正在测试…" : "测试翻译")
+                            Spacer()
+                            Image(systemName: "bolt.horizontal.circle")
+                        }
+                    }
+                    if !testResult.isEmpty {
+                        Text(testResult)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                    }
+                } header: {
+                    Text("翻译")
+                } footer: {
+                    Text("内置免费通道不用填 API Key，装上就能用（有道 + MyMemory 双通道）。填了自配接口才走自配。")
+                }
+
+                Section {
                     Picker("识别模型", selection: $modelID) {
                         ForEach(ModelManager.catalog) { model in
                             Text("\(model.title) · \(model.sizeText)").tag(model.id)
@@ -72,5 +101,30 @@ struct LiveSettingsView: View {
 
     private var sourceName: String {
         sources.first(where: { $0.id == source })?.name ?? "自动检测"
+    }
+
+    private func runTest() {
+        testing = true
+        testResult = "正在请求翻译通道…"
+        let sample = "おはようございます、今日はいい天気ですね。"
+        Task {
+            do {
+                let translated = try await TranslationHub.shared.translate(
+                    sample,
+                    source: source == "auto" ? "ja" : source,
+                    target: LangCode.code(for: target)
+                )
+                let channel = await TranslationHub.shared.currentEngine()
+                await MainActor.run {
+                    testResult = "成功（\(channel)）：\(translated)"
+                    testing = false
+                }
+            } catch {
+                await MainActor.run {
+                    testResult = "失败：\(error.localizedDescription)"
+                    testing = false
+                }
+            }
+        }
     }
 }

@@ -18,6 +18,8 @@ enum Prefs {
     static var bgConvert: Bool { UserDefaults.standard.object(forKey: "bgConvert") as? Bool ?? true }
     static var fastASR: Bool { UserDefaults.standard.object(forKey: "fastASR") as? Bool ?? true }
     static var translateTarget: String { UserDefaults.standard.string(forKey: "translateTarget") ?? "简体中文" }
+    static var translateEngine: String { UserDefaults.standard.string(forKey: "translateEngine") ?? "auto" }
+    static var translateEnabled: Bool { UserDefaults.standard.object(forKey: "translateEnabled") as? Bool ?? true }
     static var liveSource: String { UserDefaults.standard.string(forKey: "sourceLangPref") ?? "auto" }
 
     // 视频

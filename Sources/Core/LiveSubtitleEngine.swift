@@ -156,30 +156,46 @@ final class LiveSubtitleEngine: ObservableObject {
             self.cues.append(cue)
         }
 
-        let config = TranslatorConfig.load()
-        guard config.isUsable else {
-            DispatchQueue.main.async { self.status = "没配翻译接口，只显示原文" }
+        guard Prefs.translateEnabled else { return }
+
+        // 检测到的语言：优先用设置里指定的，没指定就用 whisper 识别出来的
+        let sourceCode: String = {
+            if let lang = sourceLanguage, !lang.isEmpty, lang != "auto" { return lang }
+            return engine.lastLanguage ?? "auto"
+        }()
+        let targetCode = LangCode.code(for: Prefs.translateTarget)
+
+        // 原片和目标本来就同一种语言（比如中文片翻中文），不用再翻一遍
+        if LangCode.isSame(sourceCode, targetCode) {
+            DispatchQueue.main.async { self.status = "原片就是\(Prefs.translateTarget)，直接显示原文" }
             return
         }
 
-        // 原片就是中文、目标也是中文，就不用再翻译一遍，省时间也更干净
-        if engine.lastLanguage == "zh" && Prefs.translateTarget.contains("中文") {
-            DispatchQueue.main.async { self.status = "原片是中文，直接显示原文" }
-            return
-        }
+        let config = TranslatorConfig.load()
 
         Task { [weak self] in
             guard let self else { return }
             do {
-                let translated = try await SubtitleTranslator.translate(recognized, config: config, onProgress: { _ in })
-                let joined = translated.map { $0.text }.joined(separator: " ")
+                let translated: String
+                if config.useAPI {
+                    let single = try await SubtitleTranslator.translate(recognized, config: config, onProgress: { _ in })
+                    translated = single.map { $0.text }.joined(separator: " ")
+                } else {
+                    translated = try await TranslationHub.shared.translate(original, source: sourceCode, target: targetCode)
+                }
+                guard !translated.isEmpty else { return }
+                let channel = await TranslationHub.shared.currentEngine()
                 DispatchQueue.main.async {
                     if let index = self.cues.firstIndex(where: { $0.id == cue.id }) {
-                        self.cues[index].translated = joined
+                        self.cues[index].translated = translated
                     }
+                    self.status = config.useAPI ? "边看边译中 · 自配接口" : "边看边译中 · \(channel)"
                 }
             } catch {
-                // 翻译失败就保留原文，不影响观看
+                // 翻译失败就保留原文，同时把原因显示在状态条上，方便定位
+                DispatchQueue.main.async {
+                    self.status = "译文没出来：\(error.localizedDescription)"
+                }
             }
         }
     }

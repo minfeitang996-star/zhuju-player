@@ -6,6 +6,8 @@ struct TranslatorConfig {
     var apiKey: String
     var model: String
     var targetLanguage: String
+    /// auto（有 Key 就用自己的，没有就走免费通道）/ free（只用免费通道）/ api（只用自配接口）
+    var engine: String
 
     static func load() -> TranslatorConfig {
         let defaults = UserDefaults.standard
@@ -14,7 +16,8 @@ struct TranslatorConfig {
             baseURL: defaults.string(forKey: "apiBase") ?? "",
             apiKey: defaults.string(forKey: "apiKey") ?? "",
             model: defaults.string(forKey: "apiModel") ?? "deepseek-chat",
-            targetLanguage: Prefs.translateTarget
+            targetLanguage: Prefs.translateTarget,
+            engine: Prefs.translateEngine
         )
     }
 
@@ -22,6 +25,12 @@ struct TranslatorConfig {
         enabled
             && !baseURL.trimmingCharacters(in: .whitespaces).isEmpty
             && !apiKey.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// 这次翻译走不走自配接口；不走就用内置免密钥通道（有道 / MyMemory）
+    var useAPI: Bool {
+        guard enabled, engine != "free" else { return false }
+        return isUsable
     }
 }
 
@@ -50,7 +59,10 @@ enum SubtitleTranslator {
                           config: TranslatorConfig,
                           onProgress: @escaping (Double) -> Void) async throws -> [SubtitleCue] {
 
-        guard config.isUsable else { throw TranslatorError.notConfigured }
+        // 没配自配接口、或用户选了免费通道 → 走内置免密钥翻译，不报「未配置」
+        if !config.useAPI {
+            return await translateFree(cues, target: config.targetLanguage, onProgress: onProgress)
+        }
 
         var output = cues
         let total = max(1, cues.count)
@@ -71,6 +83,29 @@ enum SubtitleTranslator {
             onProgress(Double(done) / Double(total))
         }
 
+        return output
+    }
+
+    /// 免密钥通道：逐条翻，单条失败保留原文，不中断整批
+    private static func translateFree(_ cues: [SubtitleCue],
+                                      target: String,
+                                      onProgress: @escaping (Double) -> Void) async -> [SubtitleCue] {
+        var output = cues
+        let total = max(1, cues.count)
+
+        for index in cues.indices {
+            if Task.isCancelled { break }
+            let text = cues[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                do {
+                    let translated = try await TranslationHub.shared.translate(text, source: "auto", target: LangCode.code(for: target))
+                    if !translated.isEmpty { output[index].text = translated }
+                } catch {
+                    // 单条失败就保留原文，下一轮继续翻
+                }
+            }
+            onProgress(Double(index + 1) / Double(total))
+        }
         return output
     }
 
