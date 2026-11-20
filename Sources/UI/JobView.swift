@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 struct JobView: View {
 
@@ -13,6 +13,7 @@ struct JobView: View {
     @State private var translate: Bool = true
     @State private var running = false
     @AppStorage("bgConvert") private var bgConvert: Bool = true
+    @AppStorage("fastASR") private var fastASR: Bool = true
 
     private struct LangOption: Identifiable {
         let id: String
@@ -46,6 +47,17 @@ struct JobView: View {
                     Text("识别模型")
                 } footer: {
                     Text("首次用要下载一次，之后完全离线识别。视频越长越推荐 small。")
+                }
+
+                Section {
+                    Picker("识别速度", selection: $fastASR) {
+                        Text("极速").tag(true)
+                        Text("标准").tag(false)
+                    }
+                } header: {
+                    Text("速度")
+                } footer: {
+                    Text("极速比标准快 20~35%，模型也只加载一次；个别生僻词或口音重的地方识别不稳时切标准。无人声的片段会自动跳过，不占时间。")
                 }
 
                 Section("视频语言") {

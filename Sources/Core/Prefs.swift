@@ -16,6 +16,7 @@ enum Prefs {
     static var keepRate: Bool { UserDefaults.standard.object(forKey: "keepRate") as? Bool ?? true }
     static var backgroundAudio: Bool { UserDefaults.standard.bool(forKey: "bgAudio") }
     static var bgConvert: Bool { UserDefaults.standard.object(forKey: "bgConvert") as? Bool ?? true }
+    static var fastASR: Bool { UserDefaults.standard.object(forKey: "fastASR") as? Bool ?? true }
 
     // 视频
     static var hwDecode: String { UserDefaults.standard.string(forKey: "hwDecode") ?? "auto" }

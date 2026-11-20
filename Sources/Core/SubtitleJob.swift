@@ -64,12 +64,11 @@ final class SubtitleJob: ObservableObject {
             }
 
             apply(status: "加载识别模型…", progress: 0.02)
-            let engine = WhisperEngine()
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let engine = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<WhisperEngine, Error>) in
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
-                        try engine.load(modelPath: modelURL.path)
-                        continuation.resume()
+                        let shared = try WhisperEngine.shared(modelPath: modelURL.path, fastMode: Prefs.fastASR)
+                        continuation.resume(returning: shared)
                     } catch {
                         continuation.resume(throwing: error)
                     }
@@ -159,7 +158,7 @@ final class SubtitleJob: ObservableObject {
                 var cues: [SubtitleCue] = []
                 let lock = NSLock()
                 do {
-                    try AudioExtractor.stream(from: videoURL, window: 50, onWindow: { samples, offset in
+                    try AudioExtractor.stream(from: videoURL, window: 50, skipSilence: true, onWindow: { samples, offset in
                         engine.transcribe(samples: samples, offset: offset, language: language) { cue in
                             lock.lock()
                             cues.append(cue)

@@ -1,4 +1,4 @@
-import Foundation
+﻿import Foundation
 import AVFoundation
 import MobileVLCKit
 
@@ -33,6 +33,7 @@ enum AudioExtractor {
     /// 直接用 AVFoundation 读取（mp4/mov/m4v/3gp/mp3 等），速度快。
     static func stream(from url: URL,
                        window: Double = 50,
+                       skipSilence: Bool = true,
                        onWindow: ([Float], TimeInterval) -> Void,
                        onProgress: (Double) -> Void) throws {
 
@@ -71,7 +72,9 @@ enum AudioExtractor {
             while buffer.count >= windowSamples {
                 let slice = Array(buffer[0..<windowSamples])
                 buffer.removeFirst(windowSamples)
-                onWindow(slice, windowStart)
+                if !(skipSilence && isSilent(slice)) {
+                    onWindow(slice, windowStart)
+                }
                 windowStart += Double(windowSamples) / sampleRate
                 if totalSeconds > 0 {
                     onProgress(min(1.0, windowStart / totalSeconds))
@@ -80,7 +83,9 @@ enum AudioExtractor {
         }
 
         if !buffer.isEmpty {
-            onWindow(buffer, windowStart)
+            if !(skipSilence && isSilent(buffer)) {
+                onWindow(buffer, windowStart)
+            }
             windowStart += Double(buffer.count) / sampleRate
         }
 
@@ -90,6 +95,15 @@ enum AudioExtractor {
         if totalSeconds > 0 {
             onProgress(1.0)
         }
+    }
+
+    /// 静音/纯底噪：低于 -54 dBFS 就不送识别了，能省掉大段无对白的计算
+    static func isSilent(_ samples: [Float]) -> Bool {
+        guard !samples.isEmpty else { return true }
+        var energy: Float = 0
+        for value in samples { energy += value * value }
+        let rms = (energy / Float(samples.count)).squareRoot()
+        return rms < 0.002
     }
 
     private static func floats(from sampleBuffer: CMSampleBuffer) -> [Float]? {
