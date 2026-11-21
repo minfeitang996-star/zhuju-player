@@ -612,7 +612,7 @@ struct PlayerScreen: View {
                     controller.togglePlay()
                 } label: {
                     PlayPauseGlyph(playing: controller.playing)
-                        .frame(width: 34, height: 30)
+                        .frame(width: 30, height: 26)
                 }
 
                 Button {
@@ -834,16 +834,16 @@ struct PlayPauseGlyph: View {
     var body: some View {
         ZStack {
             if playing {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .frame(width: 6, height: 26)
+                        .frame(width: 4, height: 20)
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .frame(width: 6, height: 26)
+                        .frame(width: 4, height: 20)
                 }
             } else {
                 PlayTriangle()
                     .fill(Color.white)
-                    .frame(width: 20, height: 24)
+                    .frame(width: 16, height: 19)
             }
         }
         .foregroundColor(.white)
