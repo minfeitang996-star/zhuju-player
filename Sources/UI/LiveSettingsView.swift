@@ -12,6 +12,7 @@ struct LiveSettingsView: View {
     @AppStorage("translateEngine") private var engine: String = "auto"
     @AppStorage("liveSubSize") private var subSize: String = "small"
     @AppStorage("liveSubPos") private var subPos: String = "low"
+    @AppStorage("liveSubManualPad") private var manualPad: Double = 60
     @State private var testing = false
     @State private var testResult = ""
 
@@ -58,13 +59,27 @@ struct LiveSettingsView: View {
                     Picker("字幕位置", selection: $subPos) {
                         Text("贴底（控制栏上方）").tag("low")
                         Text("贴底（控制栏下方）").tag("below")
+                        Text("手动拖拉（在画面上拖字幕）").tag("drag")
                         Text("再高一点").tag("mid")
                     }
                     .pickerStyle(.navigationLink)
+                    if subPos == "drag" {
+                        HStack {
+                            Text("字幕高度")
+                            Slider(value: $manualPad, in: 0...300)
+                        }
+                    } else {
+                        HStack {
+                            Text("字幕高度")
+                            Slider(value: $manualPad, in: 0...300)
+                            .disabled(true)
+                        }
+                        .opacity(0.45)
+                    }
                 } header: {
                     Text("字幕外观")
                 } footer: {
-                    Text("控制栏上方＝字幕落在播放键那一排上面；控制栏下方＝贴到画面最底边（全屏时几乎贴边）。带立体描边，不挡画面中间。")
+                    Text("控制栏上方＝字幕落在播放键那一排上面；控制栏下方＝贴到画面最底边；手动拖拉＝选它后可以直接在画面上上下拖字幕，滑块也能微调。带立体描边，不挡画面中间。")
                 }
 
                 Section {

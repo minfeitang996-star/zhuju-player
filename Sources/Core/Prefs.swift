@@ -34,6 +34,14 @@ enum Prefs {
     static var showOrientationLock: Bool { UserDefaults.standard.object(forKey: "showOrientationLock") as? Bool ?? true }
     static var liveSubLevel: String { UserDefaults.standard.string(forKey: "liveSubSize") ?? "small" }
     static var liveSubPosition: String { UserDefaults.standard.string(forKey: "liveSubPos") ?? "low" }
+    /// 手动拖拉模式下的字幕离底距离（0...360）
+    static var liveSubManualPad: CGFloat {
+        CGFloat(UserDefaults.standard.object(forKey: "liveSubManualPad") as? Double ?? 60)
+    }
+    static func setLiveSubManualPad(_ value: CGFloat) {
+        let clamped = max(0, min(360, value))
+        UserDefaults.standard.set(Double(clamped), forKey: "liveSubManualPad")
+    }
     static var liveSubSize: CGFloat {
         switch liveSubLevel {
         case "large": return 21

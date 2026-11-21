@@ -295,6 +295,7 @@ struct PlayerScreen: View {
     @State private var baseVolume: Float = 1
     @State private var hudText: String?
     @State private var orientationLocked = false
+    @State private var dragStartPad: CGFloat?
     @State private var openPanel: PlayPanel?
 
     private enum PlayerSheet: String, Identifiable {
@@ -515,10 +516,12 @@ struct PlayerScreen: View {
                     .background(Color.black.opacity(0.38))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.horizontal, 22)
-                    // 贴到播放/暂停那一排的上面，靠画面最底部
                     .padding(.bottom, liveBottomPadding)
+                    .contentShape(Rectangle())
+                    .gesture(subtitleDrag, including: Prefs.liveSubPosition == "drag" ? .all : .none)
                 }
-                .allowsHitTesting(false)
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(Prefs.liveSubPosition == "drag")
             }
 
             if liveOn, liveStatusVisible {
@@ -865,6 +868,16 @@ struct PlayerScreen: View {
             .padding(.horizontal, 12)
     }
 
+    /// 手动拖拉字幕：在画面上直接上下拖，实时写回位置
+    private var subtitleDrag: some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .onChanged { value in
+                if dragStartPad == nil { dragStartPad = Prefs.liveSubManualPad }
+                Prefs.setLiveSubManualPad((dragStartPad ?? 60) - value.translation.height)
+            }
+            .onEnded { _ in dragStartPad = nil }
+    }
+
     private func closePanel() {
         withAnimation(.easeOut(duration: 0.15)) { openPanel = nil }
         scheduleHide()
@@ -920,6 +933,8 @@ struct PlayerScreen: View {
     /// 字幕贴底距离：控制栏上方 / 控制栏下方（贴画面最底边）/ 再高一点
     private var liveBottomPadding: CGFloat {
         switch Prefs.liveSubPosition {
+        case "drag":
+            return Prefs.liveSubManualPad
         case "below":
             // 控制栏那一排的下方，直接贴画面最底边
             return showControls ? 8 : 5
