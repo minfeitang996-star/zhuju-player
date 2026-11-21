@@ -10,6 +10,8 @@ struct LiveSettingsView: View {
     @AppStorage("translateTarget") private var target: String = "简体中文"
     @AppStorage("modelID") private var modelID: String = "ggml-base.bin"
     @AppStorage("translateEngine") private var engine: String = "auto"
+    @AppStorage("liveSubSize") private var subSize: String = "small"
+    @AppStorage("liveSubPos") private var subPos: String = "low"
     @State private var testing = false
     @State private var testResult = ""
 
@@ -42,6 +44,22 @@ struct LiveSettingsView: View {
                     Text("语言")
                 } footer: {
                     Text("看日本片翻中文：原片语言选「日语」，翻译成选「简体中文」。不知道是什么语言就都放「自动检测」。")
+                }
+
+                Section {
+                    Picker("字幕大小", selection: $subSize) {
+                        Text("小（默认）").tag("small")
+                        Text("中").tag("medium")
+                        Text("大").tag("large")
+                    }
+                    Picker("字幕位置", selection: $subPos) {
+                        Text("贴底（控制栏上方）").tag("low")
+                        Text("再高一点").tag("mid")
+                    }
+                } header: {
+                    Text("字幕外观")
+                } footer: {
+                    Text("字幕落在这条播放/暂停键那一排的上面，带立体描边，不挡画面中间。")
                 }
 
                 Section {

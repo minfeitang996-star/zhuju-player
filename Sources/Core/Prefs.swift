@@ -21,6 +21,15 @@ enum Prefs {
     static var translateEngine: String { UserDefaults.standard.string(forKey: "translateEngine") ?? "auto" }
     static var translateEnabled: Bool { UserDefaults.standard.object(forKey: "translateEnabled") as? Bool ?? true }
     static var liveSource: String { UserDefaults.standard.string(forKey: "sourceLangPref") ?? "auto" }
+    static var liveSubLevel: String { UserDefaults.standard.string(forKey: "liveSubSize") ?? "small" }
+    static var liveSubPosition: String { UserDefaults.standard.string(forKey: "liveSubPos") ?? "low" }
+    static var liveSubSize: CGFloat {
+        switch liveSubLevel {
+        case "large": return 21
+        case "medium": return 18
+        default: return 15
+        }
+    }
 
     // 视频
     static var hwDecode: String { UserDefaults.standard.string(forKey: "hwDecode") ?? "auto" }

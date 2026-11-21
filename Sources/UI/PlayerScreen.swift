@@ -131,7 +131,8 @@ final class PlayerController: ObservableObject {
     private func makeMedia(url: URL, subtitle: URL?) -> VLCMedia {
         let media = VLCMedia(url: url)
 
-        let rawScale = UserDefaults.standard.object(forKey: "subScale") as? Double ?? 110
+        // 1.6.3 起字幕默认缩小到 85%，不再糊住画面
+        let rawScale = UserDefaults.standard.object(forKey: "subScale") as? Double ?? 85
         let scale = Int(rawScale)
         media.addOption(":sub-text-scale=\(scale)")
 
@@ -253,30 +254,18 @@ struct PlayerScreen: View {
                     Spacer()
                     VStack(spacing: 3) {
                         if let translated = liveCue.translated, !translated.isEmpty {
-                            Text(translated)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(3)
-                                .shadow(color: .black.opacity(0.95), radius: 0, x: 1, y: 1)
-                                .shadow(color: .black.opacity(0.9), radius: 0, x: -1, y: -1)
-                                .shadow(color: .black.opacity(0.75), radius: 5, x: 0, y: 2)
+                            layeredText(translated, size: Prefs.liveSubSize, weight: .bold, color: .white)
                         }
-                        Text(liveCue.original)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .shadow(color: .black.opacity(0.95), radius: 0, x: 1, y: 1)
-                            .shadow(color: .black.opacity(0.7), radius: 4, x: 0, y: 1)
+                        layeredText(liveCue.original, size: Prefs.liveSubSize * 0.62, weight: .semibold,
+                                    color: Color(red: 1.0, green: 0.82, blue: 0.42))
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.42))
+                    .padding(.vertical, 5)
+                    .background(Color.black.opacity(0.38))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .padding(.horizontal, 22)
-                    // 贴着底部控制条上方，正好在播放/暂停那一排的上面
-                    .padding(.bottom, showControls ? 96 : 24)
+                    // 贴到播放/暂停那一排的上面，靠画面最底部
+                    .padding(.bottom, liveBottomPadding)
                 }
                 .allowsHitTesting(false)
             }
@@ -572,6 +561,34 @@ struct PlayerScreen: View {
             guard length > 0 else { return 0 }
             return Double(controller.player.position) * length
         }
+    }
+
+    /// 字幕贴底距离：控制栏出现时落在播放/暂停那一排上方，收起时贴画面底部
+    private var liveBottomPadding: CGFloat {
+        let base: CGFloat = showControls ? 64 : 20
+        return Prefs.liveSubPosition == "mid" ? base + 46 : base
+    }
+
+    /// 立体字幕：黑色描边 + 下移投影 + 顶部微高光，三层叠出厚度感
+    private func layeredText(_ text: String, size: CGFloat, weight: Font.Weight, color: Color) -> some View {
+        ZStack {
+            Text(text)
+                .font(.system(size: size, weight: weight))
+                .foregroundColor(.black.opacity(0.95))
+                .blur(radius: 0.6)
+                .offset(x: 0, y: 2.4)
+            Text(text)
+                .font(.system(size: size, weight: weight))
+                .foregroundColor(.black.opacity(0.85))
+                .offset(x: 0, y: 1.2)
+            Text(text)
+                .font(.system(size: size, weight: weight))
+                .foregroundColor(color)
+                .shadow(color: .white.opacity(0.22), radius: 0.8, x: 0, y: -1)
+        }
+        .multilineTextAlignment(.center)
+        .lineLimit(3)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var livePairText: String {
