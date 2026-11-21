@@ -9,6 +9,7 @@ struct TranslateSettingsView: View {
     @AppStorage("apiKey") private var apiKey: String = ""
     @AppStorage("apiModel") private var apiModel: String = "deepseek-chat"
     @AppStorage("translateEnabled") private var translateEnabled: Bool = true
+    @AppStorage("liveOverlayVisible") private var liveOverlayVisible: Bool = true
     @AppStorage("translateEngine") private var engine: String = "auto"
     @AppStorage("translateTarget") private var target: String = "简体中文"
     @AppStorage("modelID") private var modelID: String = "ggml-base.bin"
@@ -25,6 +26,7 @@ struct TranslateSettingsView: View {
         Form {
             Section {
                 Toggle("启用翻译", isOn: $translateEnabled)
+                Toggle("显示同传状态和译文", isOn: $liveOverlayVisible)
                 Picker("翻译成", selection: $target) {
                     ForEach(targets, id: \.self) { name in
                         Text(name).tag(name)
@@ -53,7 +55,7 @@ struct TranslateSettingsView: View {
             } header: {
                 Text("翻译")
             } footer: {
-                Text("内置通道不用填 API Key，有道 + MyMemory 双备份。只有填了下面的接口、并把通道选「自配接口」，才会走你自己的接口。")
+                Text("「显示同传状态和译文」关掉后，播放页那条「日语 → 简体中文 · 边看边译中」的状态条和下方滚动译文都不显示，识别仍在后台跑，再打开就继续显示。内置通道不用填 API Key，有道 + MyMemory 双备份。只有填了下面的接口、并把通道选「自配接口」，才会走你自己的接口。")
             }
 
             Section {
