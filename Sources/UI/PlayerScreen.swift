@@ -655,7 +655,7 @@ struct PlayerScreen: View {
                 Button {
                     activeSheet = .liveSettings
                 } label: {
-                    Image(systemName: "text.bubble")
+                    Image(systemName: "globe")
                         .font(.system(size: 20))
                         .foregroundColor(.white.opacity(0.9))
                 }
