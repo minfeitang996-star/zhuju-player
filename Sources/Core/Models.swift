@@ -65,8 +65,21 @@ struct MediaItem: Identifiable, Equatable {
     }
 }
 
-final class MediaLibrary: ObservableObject {
+// MARK: - 本地列表条目（文件夹 / 视频）
 
+enum LibraryEntry: Identifiable {
+    case folder(URL, Int)
+    case video(MediaItem)
+
+    var id: String {
+        switch self {
+        case .folder(let url, _): return "f:" + url.path
+        case .video(let item): return "v:" + item.url.path
+        }
+    }
+}
+
+final class MediaLibrary: ObservableObject {
     @Published var items: [MediaItem] = []
 
     let root: URL
@@ -117,7 +130,11 @@ final class MediaLibrary: ObservableObject {
     }
 
     func uniqueDestination(for fileName: String) -> URL {
-        var target = root.appendingPathComponent(fileName)
+        uniqueDestination(for: fileName, in: root)
+    }
+
+    func uniqueDestination(for fileName: String, in folder: URL) -> URL {
+        var target = folder.appendingPathComponent(fileName)
         if !FileManager.default.fileExists(atPath: target.path) { return target }
 
         let base = (fileName as NSString).deletingPathExtension
@@ -125,10 +142,27 @@ final class MediaLibrary: ObservableObject {
         var index = 2
         while true {
             let name = ext.isEmpty ? "\(base) \(index)" : "\(base) \(index).\(ext)"
-            target = root.appendingPathComponent(name)
+            target = folder.appendingPathComponent(name)
             if !FileManager.default.fileExists(atPath: target.path) { return target }
             index += 1
         }
+    }
+
+    @discardableResult
+    func importFiles(_ urls: [URL], into folder: URL) -> [String] {
+        var failures: [String] = []
+        for url in urls {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let destination = uniqueDestination(for: url.lastPathComponent, in: folder)
+                try FileManager.default.copyItem(at: url, to: destination)
+            } catch {
+                failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        reload()
+        return failures
     }
 
     func delete(_ item: MediaItem) {
@@ -139,5 +173,92 @@ final class MediaLibrary: ObservableObject {
 
     func subtitleDestination(for video: URL) -> URL {
         video.deletingPathExtension().appendingPathExtension("srt")
+    }
+
+    // MARK: - 文件夹浏览
+
+    func folders(in parent: URL) -> [URL] {
+        let all = (try? FileManager.default.contentsOfDirectory(
+            at: parent,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return all
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
+    func videos(in folder: URL) -> [MediaItem] {
+        let all = (try? FileManager.default.contentsOfDirectory(
+            at: folder,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        return all
+            .filter { Self.videoExtensions.contains($0.pathExtension.lowercased()) }
+            .map { MediaItem(url: $0) }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    func videoCount(in folder: URL) -> Int {
+        var total = videos(in: folder).count
+        for sub in folders(in: folder) {
+            total += videoCount(in: sub)
+        }
+        return total
+    }
+
+    func entries(in folder: URL) -> [LibraryEntry] {
+        let folderEntries = folders(in: folder).map {
+            LibraryEntry.folder($0, videoCount(in: $0))
+        }
+        let videoEntries = videos(in: folder).map { LibraryEntry.video($0) }
+        return folderEntries + videoEntries
+    }
+
+    func allVideos(in folder: URL? = nil) -> [MediaItem] {
+        let target = folder ?? root
+        var result = videos(in: target)
+        for sub in folders(in: target) {
+            result += allVideos(in: sub)
+        }
+        return result
+    }
+
+    @discardableResult
+    func createFolder(named name: String, in parent: URL) -> URL? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let target = parent.appendingPathComponent(trimmed, isDirectory: true)
+        guard !FileManager.default.fileExists(atPath: target.path) else { return nil }
+        do {
+            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+            return target
+        } catch {
+            return nil
+        }
+    }
+
+    @discardableResult
+    func move(_ item: MediaItem, to folder: URL) -> Bool {
+        let destination = folder.appendingPathComponent(item.url.lastPathComponent)
+        guard !FileManager.default.fileExists(atPath: destination.path) else { return false }
+        do {
+            try FileManager.default.moveItem(at: item.url, to: destination)
+            if let sub = item.subtitleURL {
+                let subDestination = folder.appendingPathComponent(sub.lastPathComponent)
+                try? FileManager.default.moveItem(at: sub, to: subDestination)
+            }
+            reload()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func deleteFolder(_ url: URL) {
+        guard url.standardizedFileURL.path != root.standardizedFileURL.path else { return }
+        try? FileManager.default.removeItem(at: url)
+        reload()
     }
 }

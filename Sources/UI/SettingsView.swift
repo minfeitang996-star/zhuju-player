@@ -26,8 +26,13 @@ struct SettingsView: View {
                     } label: {
                         Label("视频设置", systemImage: "rectangle.on.rectangle")
                     }
+                    NavigationLink {
+                        PrivacySettingsView()
+                    } label: {
+                        Label("隐私保护（文件夹加密）", systemImage: "lock.shield")
+                    }
                 } footer: {
-                    Text("播放：自动隐藏菜单、时间显示、屏幕方向、快进快退秒数、断点续播、后台播放。视频：缩放模式、长宽比、解码方式、去隔行、字幕大小。")
+                    Text("播放：自动隐藏菜单、时间显示、屏幕方向、快进快退秒数、断点续播、后台播放。视频：缩放模式、长宽比、解码方式、去隔行、字幕大小。隐私：文件夹面容加密。")
                 }
 
                 Section {
