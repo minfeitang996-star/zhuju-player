@@ -55,7 +55,7 @@ final class PlayerController: ObservableObject {
     @Published var position: Float = 0
     @Published var timeText = "00:00"
     @Published var lengthText = "00:00"
-    @Published var subtitlesEnabled = true
+    @Published var subtitlesEnabled = false
     @Published var rate: Float = 1.0
 
     private var timer: Timer?
@@ -80,7 +80,8 @@ final class PlayerController: ObservableObject {
     func open(video: URL, subtitle: URL?) {
         videoURL = video
         subtitleURL = subtitle
-        subtitlesEnabled = subtitle != nil
+        // 1.7.11 字幕默认关闭：有 srt 也不自动挂，必须手动点顶栏字幕键
+        subtitlesEnabled = false
         endReported = false
         UserDefaults.standard.set(video.lastPathComponent, forKey: "lastMedia")
 
@@ -223,6 +224,7 @@ final class PlayerController: ObservableObject {
             media.addOption(":sub-file=\(subtitle.path)")
         } else {
             media.addOption(":no-sub-autodetect-file")
+            media.addOption(":sub-track=-1")
         }
         return media
     }
@@ -625,10 +627,15 @@ struct PlayerScreen: View {
 
                 Button {
                     controller.toggleSubtitles()
+                    if controller.subtitlesEnabled {
+                        showHUD("字幕：已开启")
+                    } else {
+                        showHUD("字幕：已关闭")
+                    }
                 } label: {
                     Image(systemName: controller.subtitlesEnabled ? "captions.bubble.fill" : "captions.bubble")
                         .font(.system(size: 19))
-                        .foregroundColor(controller.subtitlesEnabled ? theme.accent : .white.opacity(0.85))
+                        .foregroundColor(controller.subtitlesEnabled ? theme.accent : .white.opacity(0.5))
                 }
                 .disabled(current.subtitleURL == nil)
 
