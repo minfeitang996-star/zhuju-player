@@ -917,9 +917,18 @@ struct PlayerScreen: View {
     }
 
     /// 字幕贴底距离：控制栏出现时落在播放/暂停那一排上方，收起时贴画面底部
+    /// 字幕贴底距离：控制栏上方 / 控制栏下方（贴画面最底边）/ 再高一点
     private var liveBottomPadding: CGFloat {
-        let base: CGFloat = showControls ? 64 : 20
-        return Prefs.liveSubPosition == "mid" ? base + 46 : base
+        switch Prefs.liveSubPosition {
+        case "below":
+            // 控制栏那一排的下方，直接贴画面最底边
+            return showControls ? 8 : 5
+        case "mid":
+            return (showControls ? 64 : 20) + 60
+        default:
+            // 贴底（控制栏上方）；控制栏收起时同样贴到最底边
+            return showControls ? 64 : 8
+        }
     }
 
     /// 立体字幕：黑色描边 + 下移投影 + 顶部微高光，三层叠出厚度感

@@ -35,11 +35,13 @@ struct LiveSettingsView: View {
                             Text(item.name).tag(item.id)
                         }
                     }
+                    .pickerStyle(.navigationLink)
                     Picker("翻译成", selection: $target) {
                         ForEach(targets, id: \.self) { name in
                             Text(name).tag(name)
                         }
                     }
+                    .pickerStyle(.navigationLink)
                 } header: {
                     Text("语言")
                 } footer: {
@@ -52,14 +54,17 @@ struct LiveSettingsView: View {
                         Text("中").tag("medium")
                         Text("大").tag("large")
                     }
+                    .pickerStyle(.navigationLink)
                     Picker("字幕位置", selection: $subPos) {
                         Text("贴底（控制栏上方）").tag("low")
+                        Text("贴底（控制栏下方）").tag("below")
                         Text("再高一点").tag("mid")
                     }
+                    .pickerStyle(.navigationLink)
                 } header: {
                     Text("字幕外观")
                 } footer: {
-                    Text("字幕落在这条播放/暂停键那一排的上面，带立体描边，不挡画面中间。")
+                    Text("控制栏上方＝字幕落在播放键那一排上面；控制栏下方＝贴到画面最底边（全屏时几乎贴边）。带立体描边，不挡画面中间。")
                 }
 
                 Section {
@@ -68,6 +73,7 @@ struct LiveSettingsView: View {
                         Text("内置免费通道").tag("free")
                         Text("自配接口（DeepSeek）").tag("api")
                     }
+                    .pickerStyle(.navigationLink)
                     Button {
                         runTest()
                     } label: {
@@ -94,6 +100,7 @@ struct LiveSettingsView: View {
                             Text("\(model.title) · \(model.sizeText)").tag(model.id)
                         }
                     }
+                    .pickerStyle(.navigationLink)
                 } header: {
                     Text("识别模型")
                 } footer: {
