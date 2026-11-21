@@ -3,14 +3,6 @@ import SwiftUI
 struct SettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var models = ModelManager.shared
-
-    @AppStorage("apiBase") private var apiBase: String = ""
-    @AppStorage("apiKey") private var apiKey: String = ""
-    @AppStorage("apiModel") private var apiModel: String = "deepseek-chat"
-    @AppStorage("translateEnabled") private var translateEnabled: Bool = true
-    @AppStorage("subScale") private var subScale: Double = 110
-    @AppStorage("modelID") private var modelID: String = "ggml-base.bin"
 
     var body: some View {
         NavigationView {
@@ -27,66 +19,21 @@ struct SettingsView: View {
                         Label("视频设置", systemImage: "rectangle.on.rectangle")
                     }
                     NavigationLink {
+                        TranslateSettingsView()
+                    } label: {
+                        Label("翻译设置", systemImage: "character.bubble")
+                    }
+                    NavigationLink {
                         PrivacySettingsView()
                     } label: {
                         Label("隐私保护（文件夹加密）", systemImage: "lock.shield")
                     }
                 } footer: {
-                    Text("播放：自动隐藏菜单、时间显示、屏幕方向、快进快退秒数、断点续播、后台播放。视频：缩放模式、长宽比、解码方式、去隔行、字幕大小。隐私：文件夹面容加密。")
+                    Text("播放：自动隐藏菜单、时间显示、屏幕方向、快进快退秒数、断点续播、后台播放。视频：缩放模式、长宽比、解码方式、去隔行、字幕大小。翻译：离线识别模型、翻译通道、翻译接口。隐私：文件夹面容加密。")
                 }
 
                 Section {
-                    ForEach(ModelManager.catalog) { model in
-                        HStack(spacing: 10) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(model.title) · \(model.sizeText)")
-                                    .font(.system(size: 14, weight: .medium))
-                                Text(model.note)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            if models.isDownloaded(model.id) {
-                                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
-                            } else if models.activeDownload == model.id {
-                                ProgressView(value: models.progress[model.id] ?? 0)
-                                    .frame(width: 50)
-                            } else {
-                                Button("下载") { download(model.id) }
-                                    .buttonStyle(.bordered)
-                                    .disabled(models.activeDownload != nil)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("离线识别模型")
-                } footer: {
-                    Text("下载后完全离线跑，不上传任何音频。当前默认用 \(modelID.replacingOccurrences(of: "ggml-", with: "").replacingOccurrences(of: ".bin", with: ""))。")
-                }
-
-                Section {
-                    TextField("Base URL，例如 https://api.deepseek.com/v1", text: $apiBase)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                    TextField("模型名，例如 deepseek-chat", text: $apiModel)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("API Key", text: $apiKey)
-                } header: {
-                    Text("翻译接口（OpenAI 兼容）")
-                } footer: {
-                    Text("DeepSeek、月之暗面、通义、OpenAI 之类的 /chat/completions 接口都能填。留空就只出原文字幕。")
-                }
-
-                Section {
-                    Toggle("启用翻译", isOn: $translateEnabled)
-                } footer: {
-                    Text("关掉就只生成原语言字幕，速度快一倍。")
-                }
-
-                Section {
-                    Text("支持的容器：mp4 / mov / m4v / mkv / avi / flv / wmv / ts / webm / rmvb / mpg / vob 等，播放由 VLC 内核负责，系统解码不了的格式也能放。")
+                    Text("支持的容器：mp4 / mov / m4v / mkv / avi / flv / wmv / ts / webm / rmvb / mpg / vob 等，播放由 VLC 内核负责，系统解不了的格式也能放。")
                         .font(.system(size: 12))
                     Text("字幕生成：mp4/mov 可直接抽音轨，速度快；mkv/avi 需要先转码音轨，耗时约为视频时长，建议插电。")
                         .font(.system(size: 12))
@@ -103,11 +50,5 @@ struct SettingsView: View {
             }
         }
         .navigationViewStyle(.stack)
-    }
-
-    private func download(_ id: String) {
-        Task {
-            _ = try? await ModelManager.shared.download(id)
-        }
     }
 }
