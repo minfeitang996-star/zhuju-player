@@ -21,6 +21,13 @@ struct LibraryView: View {
     @State private var moveTarget: MediaItem?
     @State private var moveOptions: [URL] = []
 
+    // 多选
+    @State private var selecting = false
+    @State private var selectedIDs: Set<String> = []
+    @State private var showBatchDelete = false
+    @State private var batchMoveItems: [MediaItem] = []
+    @State private var showBatchMove = false
+
     private var currentFolder: URL { path.last ?? library.root }
 
     var body: some View {
@@ -53,33 +60,46 @@ struct LibraryView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
-                        if !path.isEmpty {
-                            Button {
-                                toggleLockForCurrentFolder()
-                            } label: {
-                                Image(systemName: FolderLock.isLocked(currentFolder) ? "lock.fill" : "lock.open")
-                                    .foregroundColor(FolderLock.isLocked(currentFolder)
-                                                     ? Color(red: 1.0, green: 0.72, blue: 0.25)
-                                                     : .primary)
+                        if selecting {
+                            Button("完成") {
+                                selecting = false
+                                selectedIDs.removeAll()
                             }
-                        }
-                        Button { showLive = true } label: {
-                            Image(systemName: "waveform")
-                        }
-                        Menu {
-                            Button {
-                                showImporter = true
-                            } label: {
-                                Label("导入视频", systemImage: "square.and.arrow.down")
+                            .font(.system(size: 15, weight: .semibold))
+                        } else {
+                            if !path.isEmpty {
+                                Button {
+                                    toggleLockForCurrentFolder()
+                                } label: {
+                                    Image(systemName: FolderLock.isLocked(currentFolder) ? "lock.fill" : "lock.open")
+                                        .foregroundColor(FolderLock.isLocked(currentFolder)
+                                                         ? Color(red: 1.0, green: 0.72, blue: 0.25)
+                                                         : .primary)
+                                }
                             }
-                            Button {
-                                newFolderName = ""
-                                showNewFolder = true
-                            } label: {
-                                Label("新建文件夹", systemImage: "folder.badge.plus")
+                            Button { showLive = true } label: {
+                                Image(systemName: "waveform")
                             }
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
+                            Button("选择") {
+                                selecting = true
+                            }
+                            .font(.system(size: 15))
+                            .disabled(videosInCurrentFolder.isEmpty)
+                            Menu {
+                                Button {
+                                    showImporter = true
+                                } label: {
+                                    Label("导入视频", systemImage: "square.and.arrow.down")
+                                }
+                                Button {
+                                    newFolderName = ""
+                                    showNewFolder = true
+                                } label: {
+                                    Label("新建文件夹", systemImage: "folder.badge.plus")
+                                }
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                            }
                         }
                     }
                 }
@@ -129,6 +149,21 @@ struct LibraryView: View {
                 }
                 Button("取消", role: .cancel) { moveTarget = nil }
             }
+            .alert("删除选中的 \(selectedIDs.count) 个视频？", isPresented: $showBatchDelete) {
+                Button("取消", role: .cancel) { }
+                Button("删除", role: .destructive) { deleteSelected() }
+            } message: {
+                Text("删掉的文件不進「最近删除」，删了就没了。")
+            }
+            .confirmationDialog("批量移到哪个文件夹", isPresented: $showBatchMove, titleVisibility: .visible) {
+                ForEach(moveOptions, id: \.path) { folder in
+                    Button(folderName(folder)) {
+                        moveSelected(to: folder)
+                        batchMoveItems = []
+                    }
+                }
+                Button("取消", role: .cancel) { batchMoveItems = [] }
+            }
             .fullScreenCover(item: $selected, onDismiss: { library.reload() }) { item in
                 PlayerScreen(item: item)
                     .environmentObject(library)
@@ -137,6 +172,11 @@ struct LibraryView: View {
                 // 退到后台自动重新上锁
                 if phase == .background { unlocked.removeAll() }
             }
+            .onChange(of: path) { _ in
+                // 换文件夹时退出多选，避免选中的是上一个文件夹里的东西
+                selecting = false
+                selectedIDs.removeAll()
+            }
         }
         .navigationViewStyle(.stack)
         .onAppear { Boot.mark("C library.view") }
@@ -144,6 +184,50 @@ struct LibraryView: View {
 
     private var entries: [LibraryEntry] {
         library.entries(in: currentFolder)
+    }
+
+    private var videosInCurrentFolder: [MediaItem] {
+        entries.compactMap {
+            if case .video(let item) = $0 { return item }
+            return nil
+        }
+    }
+
+    private var allSelected: Bool {
+        !videosInCurrentFolder.isEmpty && selectedIDs.count == videosInCurrentFolder.count
+    }
+
+    private func toggleSelection(_ item: MediaItem) {
+        if selectedIDs.contains(item.id) {
+            selectedIDs.remove(item.id)
+        } else {
+            selectedIDs.insert(item.id)
+        }
+    }
+
+    private func selectedVideos() -> [MediaItem] {
+        videosInCurrentFolder.filter { selectedIDs.contains($0.id) }
+    }
+
+    private func deleteSelected() {
+        let targets = selectedVideos()
+        for item in targets {
+            removeResume(for: item)
+            library.delete(item)
+        }
+        selectedIDs.removeAll()
+        selecting = false
+        library.reload()
+    }
+
+    private func moveSelected(to folder: URL) {
+        let targets = selectedVideos()
+        for item in targets {
+            _ = library.move(item, to: folder)
+        }
+        selectedIDs.removeAll()
+        selecting = false
+        library.reload()
     }
 
     private var list: some View {
@@ -188,24 +272,42 @@ struct LibraryView: View {
 
                 case .video(let item):
                     Button {
-                        openVideo(item)
+                        if selecting {
+                            toggleSelection(item)
+                        } else {
+                            openVideo(item)
+                        }
                     } label: {
-                        row(item)
+                        HStack(spacing: 10) {
+                            if selecting {
+                                Image(systemName: selectedIDs.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 21))
+                                    .foregroundColor(selectedIDs.contains(item.id)
+                                                     ? Color(red: 1.0, green: 0.72, blue: 0.25)
+                                                     : .white.opacity(0.35))
+                            }
+                            row(item)
+                        }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(Color.white.opacity(0.06))
+                    .listRowBackground(selectedIDs.contains(item.id)
+                                       ? Color(red: 1.0, green: 0.72, blue: 0.25).opacity(0.14)
+                                       : Color.white.opacity(0.06))
                     .contextMenu {
-                        Button {
-                            moveOptions = allFolders()
-                            moveTarget = item
-                        } label: {
-                            Label("移到文件夹…", systemImage: "folder")
-                        }
-                        Button(role: .destructive) {
-                            removeResume(for: item)
-                            library.delete(item)
-                        } label: {
-                            Label("删除", systemImage: "trash")
+                        if !selecting {
+                            Button {
+                                moveOptions = allFolders()
+                                moveTarget = item
+                            } label: {
+                                Label("移到文件夹…", systemImage: "folder")
+                            }
+                            Button(role: .destructive) {
+                                removeResume(for: item)
+                                library.delete(item)
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -226,6 +328,52 @@ struct LibraryView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .refreshable { library.reload() }
+        .safeAreaInset(edge: .bottom) {
+            if selecting { selectionBar }
+        }
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 12) {
+            Button(allSelected ? "取消全选" : "全选") {
+                if allSelected {
+                    selectedIDs.removeAll()
+                } else {
+                    selectedIDs = Set(videosInCurrentFolder.map { $0.id })
+                }
+            }
+            .font(.system(size: 14, weight: .medium))
+
+            Spacer()
+
+            Text("已选 \(selectedIDs.count) 个")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button {
+                batchMoveItems = selectedVideos()
+                moveOptions = allFolders()
+                showBatchMove = true
+            } label: {
+                Label("移动", systemImage: "folder")
+            }
+            .font(.system(size: 14, weight: .medium))
+            .disabled(selectedIDs.isEmpty)
+
+            Button(role: .destructive) {
+                showBatchDelete = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+            .font(.system(size: 14, weight: .medium))
+            .foregroundColor(.red)
+            .disabled(selectedIDs.isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
     }
 
     private func folderRow(_ url: URL, count: Int) -> some View {
