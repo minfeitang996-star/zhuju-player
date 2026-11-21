@@ -1,7 +1,51 @@
 import SwiftUI
 import UIKit
 import AVFoundation
+import MediaPlayer
 import MobileVLCKit
+
+/// 用 MPVolumeView 的系统音量滑杆改「手机音量」，保证手势和侧边按键、音量 HUD 三者同步
+final class SystemVolumeBridge {
+    static let shared = SystemVolumeBridge()
+    weak var volumeView: MPVolumeView?
+
+    var slider: UISlider? {
+        volumeView?.subviews.compactMap { $0 as? UISlider }.first
+    }
+
+    var currentVolume: Float {
+        let v = AVAudioSession.sharedInstance().outputVolume
+        return v > 0 ? v : (slider?.value ?? 0)
+    }
+
+    func set(_ value: Float, allowRetry: Bool = true) {
+        let target = min(1.0, max(0, value))
+        guard let slider else {
+            if allowRetry {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                    self?.set(target, allowRetry: false)
+                }
+            }
+            return
+        }
+        slider.value = target
+        slider.sendActions(for: .touchUpInside)
+    }
+}
+
+struct SystemVolumeView: UIViewRepresentable {
+    func makeUIView(context: Context) -> MPVolumeView {
+        let view = MPVolumeView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        view.showsRouteButton = false
+        view.alpha = 0.01
+        SystemVolumeBridge.shared.volumeView = view
+        return view
+    }
+
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {
+        SystemVolumeBridge.shared.volumeView = uiView
+    }
+}
 
 final class PlayerController: ObservableObject {
 
@@ -229,6 +273,8 @@ struct PlayerScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var library: MediaLibrary
+    @AppStorage("themeID") private var themeID: String = "gold"
+    private var theme: AppTheme { AppTheme.current(themeID) }
 
     @StateObject private var controller = PlayerController()
     @State private var activeSheet: PlayerSheet?
@@ -273,23 +319,24 @@ struct PlayerScreen: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.24, execute: work)
     }
 
-    private func handleDoubleTap(at point: CGPoint, in size: CGSize) {
+    private func handleDoubleTap() {
         pendingTap?.cancel()
         guard Prefs.gestureEnabled, Prefs.gestureDoubleTap else {
             toggleControlsNow()
             return
         }
-        let third = max(1, size.width / 3)
-        if point.x > third, point.x < third * 2 {
-            controller.togglePlay()
-        } else if Prefs.gestureDoubleTapSeek {
-            let seconds = Prefs.doubleTapSeconds
-            let back = point.x <= third
-            controller.skip(back ? -seconds : seconds)
-            showHUD(back ? "◀◀ \(Int(seconds)) 秒" : "\(Int(seconds)) 秒 ▶▶")
-        } else {
-            controller.togglePlay()
-        }
+        controller.togglePlay()
+        showHUD(controller.playing ? "播放" : "暂停")
+        scheduleHide()
+    }
+
+    /// 长按画面：快进固定秒数（默认 10 秒，可在「手势与操作」里改 10/20/30）
+    private func handleLongPress() {
+        guard Prefs.gestureEnabled, Prefs.longPressSkip else { return }
+        pendingTap?.cancel()
+        let seconds = Prefs.longPressSeconds
+        controller.skip(seconds)
+        showHUD("长按快进 " + String(Int(seconds)) + " 秒")
         scheduleHide()
     }
 
@@ -302,7 +349,7 @@ struct PlayerScreen: View {
             dragAxis = dx > dy ? "h" : "v"
             if dragAxis == "v" {
                 baseBrightness = UIScreen.main.brightness
-                baseVolume = controller.volume
+                baseVolume = SystemVolumeBridge.shared.currentVolume
             } else {
                 return
             }
@@ -314,8 +361,8 @@ struct PlayerScreen: View {
             UIScreen.main.brightness = target
             showHUD("亮度 \(Int(target * 100))%")
         } else {
-            let target = min(2.0, max(0, baseVolume + Float(delta * 6)))
-            controller.setVolume(target)
+            let target = min(1.0, max(0, baseVolume + Float(delta * 1.4)))
+            SystemVolumeBridge.shared.set(target)
             showHUD("音量 \(Int(target * 100))%")
         }
     }
@@ -370,6 +417,10 @@ struct PlayerScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+            SystemVolumeView()
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             VLCVideoView(player: controller.player, mode: videoMode, safeArea: videoSafeArea, aspect: Prefs.aspectRatio, tick: layoutTick)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -382,9 +433,13 @@ struct PlayerScreen: View {
                     }
                     .highPriorityGesture(
                         SpatialTapGesture(count: 2)
-                            .onEnded { value in
-                                handleDoubleTap(at: value.location, in: geo.size)
+                            .onEnded { _ in
+                                handleDoubleTap()
                             }
+                    )
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.45, maximumDistance: 14)
+                            .onEnded { _ in handleLongPress() }
                     )
                     .gesture(
                         DragGesture(minimumDistance: 24)
@@ -545,7 +600,7 @@ struct PlayerScreen: View {
                     .font(.system(size: 13, weight: .semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color(red: 1.0, green: 0.72, blue: 0.25).opacity(0.9))
+                    .background(theme.accent.opacity(0.9))
                     .foregroundColor(.black)
                     .clipShape(Capsule())
             }
@@ -570,7 +625,7 @@ struct PlayerScreen: View {
                     ),
                     in: 0...1
                 )
-                .tint(Color(red: 1.0, green: 0.72, blue: 0.25))
+                .tint(theme.accent)
 
                 Text(controller.lengthText)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -616,7 +671,7 @@ struct PlayerScreen: View {
                     } label: {
                         Image(systemName: orientationLocked ? "lock.rotation" : "lock.rotation.open")
                             .font(.system(size: 20))
-                            .foregroundColor(orientationLocked ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.9))
+                            .foregroundColor(orientationLocked ? theme.accent : .white.opacity(0.9))
                     }
                 }
 
@@ -629,7 +684,7 @@ struct PlayerScreen: View {
                 } label: {
                     Image(systemName: controller.subtitlesEnabled ? "captions.bubble.fill" : "captions.bubble")
                         .font(.system(size: 20))
-                        .foregroundColor(controller.subtitlesEnabled ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.55))
+                        .foregroundColor(controller.subtitlesEnabled ? theme.accent : .white.opacity(0.55))
                 }
                 .disabled(current.subtitleURL == nil)
 
@@ -638,7 +693,7 @@ struct PlayerScreen: View {
                 } label: {
                     Image(systemName: liveOn ? "text.bubble.fill" : "text.bubble")
                         .font(.system(size: 19))
-                        .foregroundColor(liveOn ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.9))
+                        .foregroundColor(liveOn ? theme.accent : .white.opacity(0.9))
                 }
 
                 Button {

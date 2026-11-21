@@ -5,6 +5,7 @@ struct LibraryView: View {
 
     @EnvironmentObject private var library: MediaLibrary
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("themeID") private var themeID: String = "gold"
 
     @State private var showImporter = false
     @State private var showSettings = false
@@ -29,11 +30,12 @@ struct LibraryView: View {
     @State private var showBatchMove = false
 
     private var currentFolder: URL { path.last ?? library.root }
+    private var theme: AppTheme { AppTheme.current(themeID) }
 
     var body: some View {
         NavigationView {
             ZStack {
-                Color(red: 0.06, green: 0.06, blue: 0.07).ignoresSafeArea()
+                theme.background.ignoresSafeArea()
 
                 if entries.isEmpty {
                     emptyState
@@ -73,7 +75,7 @@ struct LibraryView: View {
                                 } label: {
                                     Image(systemName: FolderLock.isLocked(currentFolder) ? "lock.fill" : "lock.open")
                                         .foregroundColor(FolderLock.isLocked(currentFolder)
-                                                         ? Color(red: 1.0, green: 0.72, blue: 0.25)
+                                                         ? theme.accent
                                                          : .primary)
                                 }
                             }
@@ -239,7 +241,7 @@ struct LibraryView: View {
                     resumeRow(resume)
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(Color(red: 1.0, green: 0.72, blue: 0.25).opacity(0.16))
+                .listRowBackground(theme.accent.opacity(0.16))
             }
 
             ForEach(entries) { entry in
@@ -283,7 +285,7 @@ struct LibraryView: View {
                                 Image(systemName: selectedIDs.contains(item.id) ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 21))
                                     .foregroundColor(selectedIDs.contains(item.id)
-                                                     ? Color(red: 1.0, green: 0.72, blue: 0.25)
+                                                     ? theme.accent
                                                      : .white.opacity(0.35))
                             }
                             row(item)
@@ -292,7 +294,7 @@ struct LibraryView: View {
                     }
                     .buttonStyle(.plain)
                     .listRowBackground(selectedIDs.contains(item.id)
-                                       ? Color(red: 1.0, green: 0.72, blue: 0.25).opacity(0.14)
+                                       ? theme.accent.opacity(0.14)
                                        : Color.white.opacity(0.06))
                     .contextMenu {
                         if !selecting {
@@ -381,7 +383,7 @@ struct LibraryView: View {
         return HStack(spacing: 12) {
             Image(systemName: "folder.fill")
                 .font(.system(size: 26))
-                .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                .foregroundColor(theme.accent)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -392,7 +394,7 @@ struct LibraryView: View {
                     if locked {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 11))
-                            .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                            .foregroundColor(theme.accent)
                     }
                 }
                 Text(locked ? "已加密 · \(BiometricAuth.biometryName)解锁" : "\(count) 个项目")
@@ -426,12 +428,12 @@ struct LibraryView: View {
         return HStack(spacing: 12) {
             Image(systemName: "play.circle.fill")
                 .font(.system(size: 34))
-                .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                .foregroundColor(theme.accent)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("继续播放 · \(Int(saved * 100))%")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                    .foregroundColor(theme.accent)
                 Text(item.title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
@@ -465,7 +467,7 @@ struct LibraryView: View {
                     .frame(width: 46, height: 46)
                 Image(systemName: "play.rectangle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                    .foregroundColor(theme.accent)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -496,12 +498,12 @@ struct LibraryView: View {
                                     .fill(Color.white.opacity(0.15))
                                     .frame(width: 90, height: 4)
                                 Capsule()
-                                    .fill(Color(red: 1.0, green: 0.72, blue: 0.25))
+                                    .fill(theme.accent)
                                     .frame(width: max(2, 90 * CGFloat(progressValue)), height: 4)
                             }
                             Text("看到 \(Int(progressValue * 100))%")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
+                                .foregroundColor(theme.accent)
                         }
                     }
                 }
@@ -537,7 +539,7 @@ struct LibraryView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .padding(.horizontal, 22)
                     .padding(.vertical, 11)
-                    .background(Color(red: 1.0, green: 0.72, blue: 0.25))
+                    .background(theme.accent)
                     .foregroundColor(.black)
                     .clipShape(Capsule())
             }

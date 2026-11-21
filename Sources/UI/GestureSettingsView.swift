@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// 设置 →「手势与操作」：手势开关、双击动作、自动播下一集、锁方向按钮
+/// 设置 →「手势与操作」：手势开关、双击播放/暂停、长按快进、自动播下一集、锁方向按钮
 struct GestureSettingsView: View {
 
     @AppStorage("gestureEnabled") private var gestureEnabled: Bool = true
     @AppStorage("gestureDoubleTap") private var gestureDoubleTap: Bool = true
     @AppStorage("gestureDoubleTapPlay") private var gestureDoubleTapPlay: Bool = true
-    @AppStorage("gestureDoubleTapSeek") private var gestureDoubleTapSeek: Bool = true
-    @AppStorage("doubleTapSeconds") private var doubleTapSeconds: Double = 10
+    @AppStorage("longPressSkip") private var longPressSkip: Bool = true
+    @AppStorage("longPressSeconds") private var longPressSeconds: Double = 10
     @AppStorage("autoNext") private var autoNext: Bool = true
     @AppStorage("showOrientationLock") private var showOrientationLock: Bool = true
 
-    private let tapSeconds: [Double] = [5, 10, 15, 20, 30]
+    private let pressSeconds: [Double] = [10, 20, 30]
 
     var body: some View {
         Form {
@@ -19,11 +19,11 @@ struct GestureSettingsView: View {
                 Toggle("启用手势控制", isOn: $gestureEnabled)
                 Toggle("双击画面播放 / 暂停", isOn: $gestureDoubleTapPlay)
                     .disabled(!gestureEnabled)
-                Toggle("双击左右两侧快退 / 快进", isOn: $gestureDoubleTapSeek)
+                Toggle("长按画面快进", isOn: $longPressSkip)
                     .disabled(!gestureEnabled)
-                if gestureDoubleTapSeek {
-                    Picker("双击跳转秒数", selection: $doubleTapSeconds) {
-                        ForEach(tapSeconds, id: \.self) { value in
+                if longPressSkip {
+                    Picker("长按快进秒数", selection: $longPressSeconds) {
+                        ForEach(pressSeconds, id: \.self) { value in
                             Text("\(Int(value)) 秒").tag(value)
                         }
                     }
@@ -32,7 +32,7 @@ struct GestureSettingsView: View {
             } header: {
                 Text("手势")
             } footer: {
-                Text("左侧上下滑调亮度，右侧上下滑调音量，左右横滑快进快退，双击画面中间播放/暂停，双击左侧快退、右侧快进。")
+                Text("左侧上下滑调亮度，右侧上下滑调音量（手机系统音量，跟侧边按键同步），左右横滑快进快退，双击画面播放/暂停，长按画面快进固定秒数。")
             }
 
             Section {
