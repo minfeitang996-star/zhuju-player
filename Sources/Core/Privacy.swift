@@ -9,7 +9,7 @@ enum FolderLock {
 
     private static var mediaRoot: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent("Media", isDirectory: true).standardizedFileURL
+        return docs.appendingPathComponent("Media", isDirectory: true)
     }
 
     static var enabled: Bool {
@@ -17,13 +17,19 @@ enum FolderLock {
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
+    /// 相对路径：/var 与 /private/var 两种写法都归一，避免同一个文件夹算出两个键
     static func relativePath(_ url: URL) -> String {
-        let rootPath = mediaRoot.path
-        let path = url.standardizedFileURL.path
-        if path.hasPrefix(rootPath) {
-            var rel = String(path.dropFirst(rootPath.count))
-            if rel.hasPrefix("/") { rel.removeFirst() }
-            return rel
+        let candidates = [
+            (mediaRoot.standardizedFileURL.pathComponents, url.standardizedFileURL.pathComponents),
+            (mediaRoot.resolvingSymlinksInPath().pathComponents, url.resolvingSymlinksInPath().pathComponents)
+        ]
+        for (rootComps, comps) in candidates {
+            if comps.count >= rootComps.count,
+               Array(comps.prefix(rootComps.count)) == rootComps {
+                let tail = comps.dropFirst(rootComps.count)
+                if tail.isEmpty { return "" }
+                return tail.joined(separator: "/")
+            }
         }
         return url.lastPathComponent
     }
@@ -40,6 +46,29 @@ enum FolderLock {
         } else {
             UserDefaults.standard.removeObject(forKey: key(for: url))
         }
+    }
+
+    /// 往上找最近一个加密且还没解锁的上级文件夹，没找到返回 nil
+    static func firstLockedAncestor(of url: URL, excluding unlocked: Set<String>) -> URL? {
+        var current = url.deletingLastPathComponent().standardizedFileURL
+        let root = mediaRoot.standardizedFileURL
+        var guardCount = 0
+        while guardCount < 10 {
+            guardCount += 1
+            if current.pathComponents.count <= root.pathComponents.count { return nil }
+            if isLocked(current), !unlocked.contains(relativePath(current)) {
+                return current
+            }
+            let parent = current.deletingLastPathComponent().standardizedFileURL
+            if parent.path == current.path { return nil }
+            current = parent
+        }
+        return nil
+    }
+
+    /// 这个视频是不是躺在某个还没解锁的加密文件夹里
+    static func isVideoProtected(_ url: URL, excluding unlocked: Set<String>) -> Bool {
+        firstLockedAncestor(of: url, excluding: unlocked) != nil
     }
 
     static var lockedFolders: [(name: String, url: URL)] {

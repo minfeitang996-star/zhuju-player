@@ -10,6 +10,7 @@ struct PrivacySettingsView: View {
     @AppStorage("privacyLockEnabled") private var enabled: Bool = true
     @State private var folders: [LockedFolder] = []
     @State private var failed = false
+    @State private var testResult = ""
 
     var body: some View {
         Form {
@@ -25,6 +26,13 @@ struct PrivacySettingsView: View {
                     Text("这台设备还没设置面容或密码，去「设置 → 面容 ID 与密码」里设一个。")
                         .font(.system(size: 12))
                         .foregroundColor(.red)
+                }
+                Button("测试一次解锁验证") { testAuth() }
+                if !testResult.isEmpty {
+                    Text(testResult)
+                        .font(.system(size: 12))
+                        .foregroundColor(testResult.hasPrefix("通过")
+                                         ? Color(red: 0.45, green: 0.85, blue: 0.55) : .red)
                 }
             } header: {
                 Text("加密")
@@ -83,6 +91,15 @@ struct PrivacySettingsView: View {
                 } else {
                     failed = true
                 }
+            }
+        }
+    }
+
+    private func testAuth() {
+        Task {
+            let passed = await BiometricAuth.authenticate(reason: "测试面容 / 设备密码")
+            await MainActor.run {
+                testResult = passed ? "通过：\(BiometricAuth.biometryName)验证正常" : "没通过：检查设备是否已设面容或密码"
             }
         }
     }

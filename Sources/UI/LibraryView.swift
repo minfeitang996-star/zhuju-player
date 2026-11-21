@@ -44,7 +44,8 @@ struct LibraryView: View {
                         }
                     } else {
                         Button {
-                            path.removeLast()
+                            let popped = path.removeLast()
+                            unlocked.remove(FolderLock.relativePath(popped))
                         } label: {
                             Image(systemName: "chevron.left")
                         }
@@ -52,6 +53,16 @@ struct LibraryView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
+                        if !path.isEmpty {
+                            Button {
+                                toggleLockForCurrentFolder()
+                            } label: {
+                                Image(systemName: FolderLock.isLocked(currentFolder) ? "lock.fill" : "lock.open")
+                                    .foregroundColor(FolderLock.isLocked(currentFolder)
+                                                     ? Color(red: 1.0, green: 0.72, blue: 0.25)
+                                                     : .primary)
+                            }
+                        }
                         Button { showLive = true } label: {
                             Image(systemName: "waveform")
                         }
@@ -139,7 +150,7 @@ struct LibraryView: View {
         List {
             if path.isEmpty, let resume = resumeItem {
                 Button {
-                    selected = resume
+                    openVideo(resume)
                 } label: {
                     resumeRow(resume)
                 }
@@ -167,7 +178,8 @@ struct LibraryView: View {
                         } else {
                             Button {
                                 FolderLock.setLocked(url, true)
-                                unlocked.insert(FolderLock.relativePath(url))
+                                // 加锁后这个会话里也立刻上锁，必须验证才能进去
+                                unlocked.remove(FolderLock.relativePath(url))
                             } label: {
                                 Label("加密这个文件夹", systemImage: "lock.fill")
                             }
@@ -176,7 +188,7 @@ struct LibraryView: View {
 
                 case .video(let item):
                     Button {
-                        selected = item
+                        openVideo(item)
                     } label: {
                         row(item)
                     }
@@ -383,7 +395,7 @@ struct LibraryView: View {
 
     private func openFolder(_ url: URL) {
         let rel = FolderLock.relativePath(url)
-        guard FolderLock.enabled, FolderLock.isLocked(url), !unlocked.contains(rel) else {
+        guard FolderLock.isLocked(url), !unlocked.contains(rel) else {
             path.append(url)
             return
         }
@@ -397,6 +409,40 @@ struct LibraryView: View {
                     lockFailed = true
                 }
             }
+        }
+    }
+
+    /// 点视频也要过锁：防止从「继续播放」卡片直接跳进加密文件夹里的片
+    private func openVideo(_ item: MediaItem) {
+        if let locked = FolderLock.firstLockedAncestor(of: item.url, excluding: unlocked) {
+            Task {
+                let passed = await BiometricAuth.authenticate(reason: "解锁「\(locked.lastPathComponent)」")
+                await MainActor.run {
+                    if passed {
+                        unlocked.insert(FolderLock.relativePath(locked))
+                        selected = item
+                    } else {
+                        lockFailed = true
+                    }
+                }
+            }
+            return
+        }
+        selected = item
+    }
+
+    private func toggleLockForCurrentFolder() {
+        let folder = currentFolder
+        let rel = FolderLock.relativePath(folder)
+        if FolderLock.isLocked(folder) {
+            unlockAndThen(folder) {
+                FolderLock.setLocked(folder, false)
+                unlocked.remove(rel)
+            }
+        } else {
+            FolderLock.setLocked(folder, true)
+            unlocked.remove(rel)
+            if !path.isEmpty { path.removeLast() }
         }
     }
 
