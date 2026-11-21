@@ -24,12 +24,17 @@ struct SettingsView: View {
                         Label("翻译设置", systemImage: "character.bubble")
                     }
                     NavigationLink {
+                        GestureSettingsView()
+                    } label: {
+                        Label("手势与操作", systemImage: "hand.draw")
+                    }
+                    NavigationLink {
                         PrivacySettingsView()
                     } label: {
                         Label("隐私保护（文件夹加密）", systemImage: "lock.shield")
                     }
                 } footer: {
-                    Text("播放：自动隐藏菜单、时间显示、屏幕方向、快进快退秒数、断点续播、后台播放。视频：缩放模式、长宽比、解码方式、去隔行、字幕大小。翻译：离线识别模型、翻译通道、翻译接口。隐私：文件夹面容加密。")
+                    Text("播放：自动隐藏菜单、时间显示、屏幕方向、快进快退秒数、断点续播、后台播放。视频：缩放模式、长宽比、解码方式、去隔行、字幕大小。翻译：离线识别模型、翻译通道、翻译接口。手势与操作：亮度/音量手势、双击动作、自动播下一集、锁方向按钮。隐私：文件夹面容加密。")
                 }
 
                 Section {

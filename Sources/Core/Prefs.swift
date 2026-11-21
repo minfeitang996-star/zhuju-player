@@ -21,6 +21,15 @@ enum Prefs {
     static var translateEngine: String { UserDefaults.standard.string(forKey: "translateEngine") ?? "auto" }
     static var translateEnabled: Bool { UserDefaults.standard.object(forKey: "translateEnabled") as? Bool ?? true }
     static var liveSource: String { UserDefaults.standard.string(forKey: "sourceLangPref") ?? "auto" }
+
+    // 手势与操作
+    static var gestureEnabled: Bool { UserDefaults.standard.object(forKey: "gestureEnabled") as? Bool ?? true }
+    static var gestureDoubleTap: Bool { UserDefaults.standard.object(forKey: "gestureDoubleTap") as? Bool ?? true }
+    static var gestureDoubleTapPlay: Bool { UserDefaults.standard.object(forKey: "gestureDoubleTapPlay") as? Bool ?? true }
+    static var gestureDoubleTapSeek: Bool { UserDefaults.standard.object(forKey: "gestureDoubleTapSeek") as? Bool ?? true }
+    static var doubleTapSeconds: Double { UserDefaults.standard.object(forKey: "doubleTapSeconds") as? Double ?? 10 }
+    static var autoNext: Bool { UserDefaults.standard.object(forKey: "autoNext") as? Bool ?? true }
+    static var showOrientationLock: Bool { UserDefaults.standard.object(forKey: "showOrientationLock") as? Bool ?? true }
     static var liveSubLevel: String { UserDefaults.standard.string(forKey: "liveSubSize") ?? "small" }
     static var liveSubPosition: String { UserDefaults.standard.string(forKey: "liveSubPos") ?? "low" }
     static var liveSubSize: CGFloat {

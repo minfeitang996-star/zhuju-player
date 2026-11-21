@@ -18,6 +18,12 @@ final class PlayerController: ObservableObject {
     private var videoURL: URL?
     private var subtitleURL: URL?
     fileprivate var timerLogged = false
+    private var endReported = false
+
+    /// 播到结尾时回调一次（自动播下一集用）
+    var onEnd: (() -> Void)?
+    /// 当前音量 0...2（1 = 原始音量）
+    private(set) var volume: Float = 1.0
 
     init() {
         rate = Float(UserDefaults.standard.object(forKey: "playerRate") as? Double ?? 1.0)
@@ -31,6 +37,7 @@ final class PlayerController: ObservableObject {
         videoURL = video
         subtitleURL = subtitle
         subtitlesEnabled = subtitle != nil
+        endReported = false
         UserDefaults.standard.set(video.lastPathComponent, forKey: "lastMedia")
 
         Boot.mark("D player.open \(video.lastPathComponent)")
@@ -42,6 +49,7 @@ final class PlayerController: ObservableObject {
         Boot.mark("G play.called")
         player.rate = Prefs.keepRate ? rate : 1.0
         if !Prefs.keepRate { rate = 1.0 }
+        applyVolumeToPlayer()
         UIApplication.shared.isIdleTimerDisabled = true
         do {
             let session = AVAudioSession.sharedInstance()
@@ -79,8 +87,27 @@ final class PlayerController: ObservableObject {
                     }
                 }
                 UIApplication.shared.isIdleTimerDisabled = false
+                if !self.endReported {
+                    self.endReported = true
+                    DispatchQueue.main.async { self.onEnd?() }
+                }
             }
         }
+    }
+
+    /// 音量 0...2（1 = 原始音量），走 VLC 播放器内部音量，不影响系统音量
+    func setVolume(_ value: Float) {
+        volume = min(2.0, max(0, value))
+        applyVolumeToPlayer()
+    }
+
+    private func applyVolumeToPlayer() {
+        let target = Int32(volume * 100)
+        let sel = NSSelectorFromString("audio")
+        guard player.responds(to: sel),
+              let audio = player.perform(sel)?.takeUnretainedValue() as? NSObject,
+              audio.responds(to: NSSelectorFromString("setVolume:")) else { return }
+        audio.setValue(NSNumber(value: target), forKey: "volume")
     }
 
     func close() {
@@ -198,7 +225,8 @@ final class PlayerController: ObservableObject {
 
 struct PlayerScreen: View {
 
-    let item: MediaItem
+    @State private var current: MediaItem
+    @State private var pendingTap: DispatchWorkItem?
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var library: MediaLibrary
@@ -212,6 +240,12 @@ struct PlayerScreen: View {
     @StateObject private var liveSub = LiveSubtitleEngine()
     @State private var liveOn = false
     @State private var noModelAlert = false
+    @State private var pendingTap: DispatchWorkItem?
+    @State private var dragAxis: String?
+    @State private var baseBrightness: CGFloat = 0
+    @State private var baseVolume: Float = 1
+    @State private var orientationLocked = false
+    @State private var hudText: String?
 
     private enum PlayerSheet: String, Identifiable {
         case job
@@ -222,8 +256,116 @@ struct PlayerScreen: View {
     @State private var videoSafeArea: Bool = UserDefaults.standard.object(forKey: "videoSafeArea") as? Bool ?? false
 
     init(item: MediaItem) {
-        self.item = item
+        _current = State(initialValue: item)
         Boot.mark("D0 player.screen.init")
+    }
+
+    // MARK: - 手势
+
+    private func toggleControlsNow() {
+        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+        if showControls { scheduleHide() }
+    }
+
+    private func handleSingleTap() {
+        pendingTap?.cancel()
+        let work = DispatchWorkItem { [self] in self.toggleControlsNow() }
+        pendingTap = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24, execute: work)
+    }
+
+    private func handleDoubleTap(at point: CGPoint, in size: CGSize) {
+        pendingTap?.cancel()
+        guard Prefs.gestureEnabled, Prefs.gestureDoubleTap else {
+            toggleControlsNow()
+            return
+        }
+        let third = max(1, size.width / 3)
+        if point.x > third, point.x < third * 2 {
+            controller.togglePlay()
+        } else if Prefs.gestureDoubleTapSeek {
+            let seconds = Prefs.doubleTapSeconds
+            let back = point.x <= third
+            controller.skip(back ? -seconds : seconds)
+            showHUD(back ? "◀◀ \(Int(seconds)) 秒" : "\(Int(seconds)) 秒 ▶▶")
+        } else {
+            controller.togglePlay()
+        }
+        scheduleHide()
+    }
+
+    private func handleDragChanged(_ value: DragGesture.Value, in size: CGSize) {
+        guard Prefs.gestureEnabled else { return }
+        if dragAxis == nil {
+            let dx = abs(value.translation.width)
+            let dy = abs(value.translation.height)
+            guard max(dx, dy) > 14 else { return }
+            dragAxis = dx > dy ? "h" : "v"
+            if dragAxis == "v" {
+                baseBrightness = UIScreen.main.brightness
+                baseVolume = controller.volume
+            } else {
+                return
+            }
+        }
+        guard dragAxis == "v" else { return }
+        let delta = -value.translation.height / max(1, size.height)
+        if value.startLocation.x < size.width * 0.35 {
+            let target = min(1.0, max(0.02, baseBrightness + delta * 1.4))
+            UIScreen.main.brightness = target
+            showHUD("亮度 \(Int(target * 100))%")
+        } else {
+            let target = min(2.0, max(0, baseVolume + Float(delta * 6)))
+            controller.setVolume(target)
+            showHUD("音量 \(Int(target * 100))%")
+        }
+    }
+
+    private func handleDragEnded(_ value: DragGesture.Value, in size: CGSize) {
+        let axis = dragAxis
+        dragAxis = nil
+        guard axis == "h" else { return }
+        let dx = value.translation.width
+        guard abs(dx) > 45 else { return }
+        let seconds = min(120.0, max(10.0, Double(abs(dx)) / 6.0))
+        controller.skip(dx > 0 ? seconds : -seconds)
+        showHUD(dx > 0 ? "快进 \(Int(seconds)) 秒" : "快退 \(Int(seconds)) 秒")
+    }
+
+    private func showHUD(_ text: String) {
+        hudText = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [self] in
+            if self.hudText == text {
+                withAnimation(.easeOut(duration: 0.2)) { self.hudText = nil }
+            }
+        }
+    }
+
+    private func toggleOrientationLock() {
+        orientationLocked.toggle()
+        if orientationLocked {
+            OrientationHelper.apply(isFullscreen ? .landscapeRight : .portrait)
+            showHUD(isFullscreen ? "已锁定横屏" : "已锁定竖屏")
+        } else {
+            OrientationHelper.apply(isFullscreen ? .landscapeRight : .all)
+            showHUD("已解锁，可自动旋转")
+        }
+        scheduleHide()
+    }
+
+    private func playNextIfEnabled() {
+        guard Prefs.autoNext else { return }
+        guard let next = library.nextVideo(after: current) else {
+            showHUD("已是最后一个视频")
+            return
+        }
+        controller.close()
+        current = next
+        controller.onEnd = { [self] in self.playNextIfEnabled() }
+        UserDefaults.standard.removeObject(forKey: "resume:\(next.url.lastPathComponent)")
+        controller.open(video: next.url, subtitle: next.subtitleURL)
+        if liveOn { restartLive() }
+        showHUD("自动播下一集：\(next.title)")
     }
 
     var body: some View {
@@ -233,21 +375,40 @@ struct PlayerScreen: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
-                    if showControls { scheduleHide() }
-                }
-                .gesture(
-                    DragGesture(minimumDistance: 30)
-                        .onEnded { value in
-                            let dx = value.translation.width
-                            guard abs(dx) > 45 else { return }
-                            let seconds = min(120.0, max(10.0, Double(abs(dx)) / 6.0))
-                            controller.skip(dx > 0 ? seconds : -seconds)
-                        }
-                )
+            GeometryReader { geo in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        handleSingleTap()
+                    }
+                    .highPriorityGesture(
+                        SpatialTapGesture(count: 2)
+                            .onEnded { value in
+                                handleDoubleTap(at: value.location, in: geo.size)
+                            }
+                    )
+                    .gesture(
+                        DragGesture(minimumDistance: 24)
+                            .onChanged { value in
+                                handleDragChanged(value, in: geo.size)
+                            }
+                            .onEnded { value in
+                                handleDragEnded(value, in: geo.size)
+                            }
+                    )
+            }
+
+            if let hudText {
+                Text(hudText)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.55))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
 
             if liveOn, let liveCue = activeLiveCue {
                 VStack {
@@ -313,7 +474,8 @@ struct PlayerScreen: View {
             layoutTick += 1
         }
         .onAppear {
-            controller.open(video: item.url, subtitle: item.subtitleURL)
+            controller.onEnd = { [self] in self.playNextIfEnabled() }
+            controller.open(video: current.url, subtitle: current.subtitleURL)
             switch Prefs.orientation {
             case "landscape":
                 isFullscreen = true
@@ -331,6 +493,7 @@ struct PlayerScreen: View {
         }
         .onDisappear {
             liveSub.stop()
+            controller.onEnd = nil
             controller.close()
             isFullscreen = false
             OrientationHelper.apply(.portrait)
@@ -341,7 +504,7 @@ struct PlayerScreen: View {
         }) { sheet in
             switch sheet {
             case .job:
-                JobView(videoURL: item.url)
+                JobView(videoURL: current.url)
             case .liveSettings:
                 LiveSettingsView()
             }
@@ -362,7 +525,7 @@ struct PlayerScreen: View {
                     .clipShape(Circle())
             }
 
-            Text(item.title)
+            Text(current.title)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white)
                 .lineLimit(1)
@@ -447,6 +610,16 @@ struct PlayerScreen: View {
                         .foregroundColor(.white.opacity(0.9))
                 }
 
+                if Prefs.showOrientationLock {
+                    Button {
+                        toggleOrientationLock()
+                    } label: {
+                        Image(systemName: orientationLocked ? "lock.rotation" : "lock.rotation.open")
+                            .font(.system(size: 20))
+                            .foregroundColor(orientationLocked ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.9))
+                    }
+                }
+
                 aspectMenu
 
                 speedMenu
@@ -458,7 +631,7 @@ struct PlayerScreen: View {
                         .font(.system(size: 20))
                         .foregroundColor(controller.subtitlesEnabled ? Color(red: 1.0, green: 0.72, blue: 0.25) : .white.opacity(0.55))
                 }
-                .disabled(item.subtitleURL == nil)
+                .disabled(current.subtitleURL == nil)
 
                 Button {
                     toggleLive()
@@ -551,7 +724,7 @@ struct PlayerScreen: View {
             return
         }
         liveOn = true
-        liveSub.start(videoURL: item.url,
+        liveSub.start(videoURL: current.url,
                       modelPath: modelURL.path,
                       from: currentSeconds,
                       language: Prefs.liveSource == "auto" ? nil : Prefs.liveSource) { [controller] in

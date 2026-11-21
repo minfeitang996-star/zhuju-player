@@ -261,4 +261,14 @@ final class MediaLibrary: ObservableObject {
         try? FileManager.default.removeItem(at: url)
         reload()
     }
+
+    /// 同文件夹里按名称排在当前视频后面的那一个，用来「自动播下一集」
+    func nextVideo(after item: MediaItem) -> MediaItem? {
+        let folder = item.url.deletingLastPathComponent()
+        let list = videos(in: folder)
+        guard let index = list.firstIndex(where: { $0.url.path == item.url.path }) else { return nil }
+        let nextIndex = index + 1
+        guard nextIndex < list.count else { return nil }
+        return list[nextIndex]
+    }
 }
