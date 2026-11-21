@@ -251,25 +251,32 @@ struct PlayerScreen: View {
             if liveOn, let liveCue = activeLiveCue {
                 VStack {
                     Spacer()
-                    VStack(spacing: 5) {
+                    VStack(spacing: 3) {
                         if let translated = liveCue.translated, !translated.isEmpty {
                             Text(translated)
-                                .font(.system(size: 22, weight: .semibold))
+                                .font(.system(size: 17, weight: .semibold))
                                 .foregroundColor(.white)
                                 .multilineTextAlignment(.center)
+                                .lineLimit(3)
+                                .shadow(color: .black.opacity(0.95), radius: 0, x: 1, y: 1)
+                                .shadow(color: .black.opacity(0.9), radius: 0, x: -1, y: -1)
+                                .shadow(color: .black.opacity(0.75), radius: 5, x: 0, y: 2)
                         }
                         Text(liveCue.original)
-                            .font(.system(size: 12))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.25))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
+                            .shadow(color: .black.opacity(0.95), radius: 0, x: 1, y: 1)
+                            .shadow(color: .black.opacity(0.7), radius: 4, x: 0, y: 1)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color.black.opacity(0.62))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, showControls ? 132 : 46)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.42))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.horizontal, 22)
+                    // 贴着底部控制条上方，正好在播放/暂停那一排的上面
+                    .padding(.bottom, showControls ? 96 : 24)
                 }
                 .allowsHitTesting(false)
             }
