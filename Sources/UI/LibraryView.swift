@@ -8,6 +8,12 @@ struct LibraryView: View {
     @AppStorage("themeID") private var themeID: String = "gold"
 
     @State private var showImporter = false
+    @State private var jobTarget: JobTarget?
+
+    private struct JobTarget: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
     @State private var showSettings = false
     @State private var showLive = false
     @State private var selected: MediaItem?
@@ -111,6 +117,9 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showLive) {
                 LiveView()
+            }
+            .sheet(item: $jobTarget, onDismiss: { library.reload() }) { target in
+                JobView(videoURL: target.url)
             }
             .fileImporter(isPresented: $showImporter,
                           allowedContentTypes: [.movie, .video, .audiovisualContent, .data],
@@ -298,6 +307,11 @@ struct LibraryView: View {
                                        : Color.white.opacity(0.06))
                     .contextMenu {
                         if !selecting {
+                            Button {
+                                jobTarget = JobTarget(url: item.url)
+                            } label: {
+                                Label(item.subtitleURL == nil ? "生成字幕" : "重新生成字幕", systemImage: "wand.and.stars")
+                            }
                             Button {
                                 moveOptions = allFolders()
                                 moveTarget = item

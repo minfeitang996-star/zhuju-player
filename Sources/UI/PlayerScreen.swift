@@ -595,17 +595,6 @@ struct PlayerScreen: View {
 
             Spacer()
 
-            Button {
-                activeSheet = .job
-            } label: {
-                Label("生成字幕", systemImage: "wand.and.stars")
-                    .font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(theme.accent.opacity(0.9))
-                    .foregroundColor(.black)
-                    .clipShape(Capsule())
-            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
