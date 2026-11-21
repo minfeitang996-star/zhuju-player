@@ -1,0 +1,564 @@
+﻿2026-11-21T12:31:18.8557290Z Current runner version: '2.338.2'
+2026-11-21T12:31:18.8572350Z ##[group]Runner Image Provisioner
+2026-11-21T12:31:18.8572870Z Hosted Compute Agent
+2026-11-21T12:31:18.8573240Z Version: 20261111.635
+2026-11-21T12:31:18.8573640Z Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+2026-11-21T12:31:18.8574110Z Build Date: 2026-11-11T01:49:01Z
+2026-11-21T12:31:18.8574550Z Worker ID: {f9dbc3b7-a8ac-4c19-a7ed-733385c3a895}
+2026-11-21T12:31:18.8575010Z Region: westus
+2026-11-21T12:31:18.8575350Z Cloud: MacCloud
+2026-11-21T12:31:18.8575700Z ##[endgroup]
+2026-11-21T12:31:18.8576630Z ##[group]Operating System
+2026-11-21T12:31:18.8577010Z macOS
+2026-11-21T12:31:18.8577330Z 15.8.2
+2026-11-21T12:31:18.8577650Z 24H232
+2026-11-21T12:31:18.8577970Z ##[endgroup]
+2026-11-21T12:31:18.8578320Z ##[group]Runner Image
+2026-11-21T12:31:18.8578690Z Image: macos-15-arm64
+2026-11-21T12:31:18.8579050Z Version: 20261118.0550.1
+2026-11-21T12:31:18.8579870Z Included Software: https://github.com/actions/runner-images/blob/macos-15-arm64/20261118.0550/images/macos/macos-15-arm64-Readme.md
+2026-11-21T12:31:18.8580910Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20261118.0550
+2026-11-21T12:31:18.8581670Z ##[endgroup]
+2026-11-21T12:31:18.8582530Z ##[group]GITHUB_TOKEN Permissions
+2026-11-21T12:31:18.8583840Z Contents: read
+2026-11-21T12:31:18.8584210Z Metadata: read
+2026-11-21T12:31:18.8584590Z Packages: read
+2026-11-21T12:31:18.8584950Z ##[endgroup]
+2026-11-21T12:31:18.8586360Z Secret source: Actions
+2026-11-21T12:31:18.8586920Z Cache mode: write
+2026-11-21T12:31:18.8587370Z Prepare workflow directory
+2026-11-21T12:31:18.8819590Z Prepare all required actions
+2026-11-21T12:31:18.8853870Z Getting action download info
+2026-11-21T12:31:19.0354420Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-21T12:31:19.3185120Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-11-21T12:31:19.4593710Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-21T12:31:19.6719490Z Complete job name: build (macos-15)
+2026-11-21T12:31:19.7304470Z ##[group]Run actions/checkout@v4
+2026-11-21T12:31:19.7305180Z with:
+2026-11-21T12:31:19.7305570Z   repository: minfeitang996-star/zhuju-player
+2026-11-21T12:31:19.7308540Z   token: ***
+2026-11-21T12:31:19.7308900Z   ssh-strict: true
+2026-11-21T12:31:19.7309280Z   ssh-user: git
+2026-11-21T12:31:19.7309600Z   persist-credentials: true
+2026-11-21T12:31:19.7310020Z   clean: true
+2026-11-21T12:31:19.7310390Z   sparse-checkout-cone-mode: true
+2026-11-21T12:31:19.7310770Z   fetch-depth: 1
+2026-11-21T12:31:19.7311080Z   fetch-tags: false
+2026-11-21T12:31:19.7311400Z   show-progress: true
+2026-11-21T12:31:19.7311730Z   lfs: false
+2026-11-21T12:31:19.7312030Z   submodules: false
+2026-11-21T12:31:19.7312390Z   set-safe-directory: true
+2026-11-21T12:31:19.7312830Z   allow-unsafe-pr-checkout: false
+2026-11-21T12:31:19.7313360Z ##[endgroup]
+2026-11-21T12:31:20.1672760Z Syncing repository: minfeitang996-star/zhuju-player
+2026-11-21T12:31:20.1674230Z ##[group]Getting Git version info
+2026-11-21T12:31:20.1675050Z Working directory is '/Users/runner/work/zhuju-player/zhuju-player'
+2026-11-21T12:31:20.1676020Z [command]/opt/homebrew/bin/git version
+2026-11-21T12:31:20.1921270Z git version 2.56.1
+2026-11-21T12:31:20.1934880Z ##[endgroup]
+2026-11-21T12:31:20.1941160Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/05f95377-dce4-405b-82d0-bf3b3fa8b343/.gitconfig'
+2026-11-21T12:31:20.1948010Z Temporarily overriding HOME='/Users/runner/work/_temp/05f95377-dce4-405b-82d0-bf3b3fa8b343' before making global git config changes
+2026-11-21T12:31:20.1949160Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-21T12:31:20.1951150Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:31:20.2048670Z Deleting the contents of '/Users/runner/work/zhuju-player/zhuju-player'
+2026-11-21T12:31:20.2052310Z ##[group]Initializing the repository
+2026-11-21T12:31:20.2057870Z [command]/opt/homebrew/bin/git init /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:31:20.2266510Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-21T12:31:20.2269570Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-21T12:31:20.2272070Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-21T12:31:20.2272830Z hint: call:
+2026-11-21T12:31:20.2273160Z hint:
+2026-11-21T12:31:20.2273640Z hint: 	git config --global init.defaultBranch <name>
+2026-11-21T12:31:20.2274090Z hint:
+2026-11-21T12:31:20.2274560Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-21T12:31:20.2275350Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-21T12:31:20.2275980Z hint:
+2026-11-21T12:31:20.2276310Z hint: 	git branch -m <name>
+2026-11-21T12:31:20.2276840Z hint:
+2026-11-21T12:31:20.2277440Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-21T12:31:20.2278260Z Initialized empty Git repository in /Users/runner/work/zhuju-player/zhuju-player/.git/
+2026-11-21T12:31:20.2280020Z [command]/opt/homebrew/bin/git remote add origin https://github.com/minfeitang996-star/zhuju-player
+2026-11-21T12:31:20.2363540Z ##[endgroup]
+2026-11-21T12:31:20.2364450Z ##[group]Disabling automatic garbage collection
+2026-11-21T12:31:20.2365590Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-11-21T12:31:20.2435600Z ##[endgroup]
+2026-11-21T12:31:20.2436810Z ##[group]Setting up auth
+2026-11-21T12:31:20.2441710Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-21T12:31:20.2515540Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-21T12:31:20.3389540Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-21T12:31:20.3437390Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-21T12:31:20.4053100Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-21T12:31:20.4103180Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-21T12:31:20.5106550Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-21T12:31:20.5336110Z ##[endgroup]
+2026-11-21T12:31:20.5337140Z ##[group]Fetching the repository
+2026-11-21T12:31:20.5338970Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +402ab61fb1a16e96c7ffe59d21dc24ef53354dcc:refs/remotes/origin/main
+2026-11-21T12:31:21.3601970Z From https://github.com/minfeitang996-star/zhuju-player
+2026-11-21T12:31:21.3603310Z  * [new ref]         402ab61fb1a16e96c7ffe59d21dc24ef53354dcc -> origin/main
+2026-11-21T12:31:21.3605980Z ##[endgroup]
+2026-11-21T12:31:21.3606800Z ##[group]Determining the checkout info
+2026-11-21T12:31:21.3607720Z ##[endgroup]
+2026-11-21T12:31:21.3609140Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-11-21T12:31:21.3707890Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-21T12:31:21.3784640Z ##[group]Checking out the ref
+2026-11-21T12:31:21.3786590Z [command]/opt/homebrew/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-21T12:31:21.4093000Z Switched to a new branch 'main'
+2026-11-21T12:31:21.4112000Z branch 'main' set up to track 'origin/main'.
+2026-11-21T12:31:21.4149760Z ##[endgroup]
+2026-11-21T12:31:21.4298710Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-11-21T12:31:21.4301400Z 402ab61fb1a16e96c7ffe59d21dc24ef53354dcc
+2026-11-21T12:31:21.4491820Z ##[group]Run sw_vers
+2026-11-21T12:31:21.4492770Z [36;1msw_vers[0m
+2026-11-21T12:31:21.4493630Z [36;1msudo xcode-select -s /Applications/Xcode.app[0m
+2026-11-21T12:31:21.4494720Z [36;1mxcodebuild -version[0m
+2026-11-21T12:31:21.4536940Z shell: /bin/bash -e {0}
+2026-11-21T12:31:21.4537770Z ##[endgroup]
+2026-11-21T12:31:21.5105400Z ProductName:		macOS
+2026-11-21T12:31:21.5208060Z ProductVersion:		15.8.2
+2026-11-21T12:31:21.5262420Z BuildVersion:		24H232
+2026-11-21T12:31:22.6406070Z Xcode 16.4
+2026-11-21T12:31:22.6408640Z Build version 16F6
+2026-11-21T12:31:22.6449200Z ##[group]Run brew install xcodegen cmake cocoapods || true
+2026-11-21T12:31:22.6449670Z [36;1mbrew install xcodegen cmake cocoapods || true[0m
+2026-11-21T12:31:22.6449990Z [36;1mxcodegen --version[0m
+2026-11-21T12:31:22.6450240Z [36;1mpod --version[0m
+2026-11-21T12:31:22.6479640Z shell: /bin/bash -e {0}
+2026-11-21T12:31:22.6479920Z ##[endgroup]
+2026-11-21T12:31:24.6359170Z [33mWarning:[0m cmake 4.5.0 is already installed and up-to-date.
+2026-11-21T12:31:24.6359690Z To reinstall 4.5.0, run:
+2026-11-21T12:31:24.6359910Z   brew reinstall cmake
+2026-11-21T12:31:25.3639200Z [32m==>[0m [1mDownloading bottle manifests[0m
+2026-11-21T12:31:25.3690380Z ✔︎ Bottle Manifest xcodegen (2.47.0)
+2026-11-21T12:31:25.3690820Z ✔︎ Bottle Manifest cocoapods (1.17.0_1)
+2026-11-21T12:31:25.4303750Z [34m==>[0m [1mWould install 2 formulae:[0m
+2026-11-21T12:31:25.4304940Z xcodegen   2.47.0
+2026-11-21T12:31:25.4305380Z cocoapods  1.17.0_1
+2026-11-21T12:31:25.4306570Z [34m==>[0m [1mWould install 1 dependency for cocoapods:[0m
+2026-11-21T12:31:25.4306920Z ruby 4.0.9
+2026-11-21T12:31:25.4731660Z [32m==>[0m [1mFetching downloads for: [32mxcodegen[39m and [32mcocoapods[39m[0m
+2026-11-21T12:31:25.8908180Z ✔︎ Bottle Manifest ruby (4.0.9)
+2026-11-21T12:31:27.5845690Z ✔︎ Bottle xcodegen (2.47.0)
+2026-11-21T12:31:34.6726010Z ✔︎ Bottle cocoapods (1.17.0_1)
+2026-11-21T12:31:35.7877850Z ✔︎ Bottle ruby (4.0.9)
+2026-11-21T12:31:35.7903860Z [34m==>[0m [1mPouring xcodegen--2.47.0.arm64_sequoia.bottle.tar.gz[0m
+2026-11-21T12:31:36.3619900Z 🍺  /opt/homebrew/Cellar/xcodegen/2.47.0: 38 files, 7.5MB
+2026-11-21T12:31:36.3774400Z [32m==>[0m [1mInstalling cocoapods dependency: [32mruby[39m (4.0.9)[0m
+2026-11-21T12:31:36.4142470Z [34m==>[0m [1mPouring ruby--4.0.9.arm64_sequoia.bottle.tar.gz[0m
+2026-11-21T12:31:37.9136530Z Unlinking /opt/homebrew/Cellar/ruby@3.3/3.3.13... 2353 symlinks removed.
+2026-11-21T12:31:46.6653640Z 🍺  /opt/homebrew/Cellar/ruby/4.0.9: 19,320 files, 59.5MB
+2026-11-21T12:31:46.6655150Z [32m==>[0m [1mInstalling [32mcocoapods[39m[0m
+2026-11-21T12:31:46.6656090Z [34m==>[0m [1mPouring cocoapods--1.17.0_1.arm64_sequoia.bottle.tar.gz[0m
+2026-11-21T12:31:50.0991540Z 🍺  /opt/homebrew/Cellar/cocoapods/1.17.0_1: 13,199 files, 23.6MB
+2026-11-21T12:31:50.0997960Z [32m==>[0m [1mCaveats[0m
+2026-11-21T12:31:50.0999140Z [34m==>[0m [1mcocoapods[0m
+2026-11-21T12:31:50.0999780Z The following cocoapods executables are shadowed by commands in /opt/homebrew/lib/ruby/gems/3.3.0/bin:
+2026-11-21T12:31:50.1000300Z pod
+2026-11-21T12:31:50.1000750Z xcodeproj
+2026-11-21T12:31:50.1001310Z Running these by name will not invoke the version provided by Homebrew
+2026-11-21T12:31:50.1002090Z because the shadowing commands come earlier in your PATH.
+2026-11-21T12:31:50.1002670Z Disable this behaviour by setting `HOMEBREW_NO_PATH_SHADOW_CHECK=1`.
+2026-11-21T12:31:50.1003250Z Hide these hints with `HOMEBREW_NO_ENV_HINTS=1` (see `man brew`).
+2026-11-21T12:31:50.1327910Z Version: 2.47.0
+2026-11-21T12:31:51.4958520Z 1.17.0
+2026-11-21T12:31:51.5131780Z ##[group]Run actions/cache@v4
+2026-11-21T12:31:51.5132090Z with:
+2026-11-21T12:31:51.5132460Z   path: ThirdParty/whisper.xcframework
+2026-11-21T12:31:51.5132680Z   key: whisper-xcframework-v1
+2026-11-21T12:31:51.5133100Z   enableCrossOsArchive: false
+2026-11-21T12:31:51.5141710Z   fail-on-cache-miss: false
+2026-11-21T12:31:51.5142200Z   lookup-only: false
+2026-11-21T12:31:51.5142980Z   save-always: false
+2026-11-21T12:31:51.5143540Z ##[endgroup]
+2026-11-21T12:31:51.9830290Z (node:7666) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-21T12:31:51.9831160Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-21T12:31:52.0601230Z Cache hit for: whisper-xcframework-v1
+2026-11-21T12:31:52.0664740Z (node:7666) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-21T12:31:52.6219430Z Received 58838314 of 58838314 (100.0%), 108.3 MBs/sec
+2026-11-21T12:31:52.6225430Z Cache Size: ~56 MB (58838314 B)
+2026-11-21T12:31:52.6430940Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/5b4f943e-6e1f-40b3-936d-b1ae544f4f8b/cache.tzst -P -C /Users/runner/work/zhuju-player/zhuju-player --delay-directory-restore --use-compress-program unzstd
+2026-11-21T12:31:53.3512910Z Cache restored successfully
+2026-11-21T12:31:53.4542170Z Cache restored from key: whisper-xcframework-v1
+2026-11-21T12:31:53.4674480Z ##[group]Run ls -d ThirdParty/whisper.xcframework
+2026-11-21T12:31:53.4674900Z [36;1mls -d ThirdParty/whisper.xcframework[0m
+2026-11-21T12:31:53.4675290Z [36;1mxcodegen generate[0m
+2026-11-21T12:31:53.4850800Z shell: /bin/bash -e {0}
+2026-11-21T12:31:53.4851030Z ##[endgroup]
+2026-11-21T12:31:53.5414280Z ThirdParty/whisper.xcframework
+2026-11-21T12:31:53.5606850Z ⚙️  Generating plists...
+2026-11-21T12:31:53.5618840Z ⚙️  Generating project...
+2026-11-21T12:31:53.5760980Z ⚙️  Writing project...
+2026-11-21T12:31:53.5831610Z Created project at /Users/runner/work/zhuju-player/zhuju-player/ZhuJu.xcodeproj
+2026-11-21T12:31:53.5932680Z ##[group]Run pod install --repo-update
+2026-11-21T12:31:53.5932990Z [36;1mpod install --repo-update[0m
+2026-11-21T12:31:53.6003060Z shell: /bin/bash -e {0}
+2026-11-21T12:31:53.6003310Z ##[endgroup]
+2026-11-21T12:31:54.8120320Z Updating local specs repositories
+2026-11-21T12:31:54.8122230Z Adding spec repo `trunk` with CDN `https://cdn.cocoapods.org`
+2026-11-21T12:31:55.3299760Z Analyzing dependencies
+2026-11-21T12:31:55.3300570Z Downloading dependencies
+2026-11-21T12:31:55.3301150Z Installing MobileVLCKit (3.7.5)
+2026-11-21T12:32:29.4448440Z Generating Pods project
+2026-11-21T12:32:29.4554000Z Integrating client project
+2026-11-21T12:32:29.4671950Z 
+2026-11-21T12:32:29.4836180Z [!] Please close any current Xcode sessions and use `ZhuJu.xcworkspace` for this project from now on.
+2026-11-21T12:32:29.5009150Z Pod installation complete! There is 1 dependency from the Podfile and 1 total pod installed.
+2026-11-21T12:32:29.5435070Z ##[group]Run set -o pipefail
+2026-11-21T12:32:29.5435880Z [36;1mset -o pipefail[0m
+2026-11-21T12:32:29.5436380Z [36;1mxcodebuild \[0m
+2026-11-21T12:32:29.5436950Z [36;1m  -workspace ZhuJu.xcworkspace \[0m
+2026-11-21T12:32:29.5437310Z [36;1m  -scheme ZhuJu \[0m
+2026-11-21T12:32:29.5437570Z [36;1m  -configuration Release \[0m
+2026-11-21T12:32:29.5437930Z [36;1m  -sdk iphoneos \[0m
+2026-11-21T12:32:29.5438230Z [36;1m  -destination 'generic/platform=iOS' \[0m
+2026-11-21T12:32:29.5438630Z [36;1m  -derivedDataPath build \[0m
+2026-11-21T12:32:29.5438980Z [36;1m  CODE_SIGNING_ALLOWED=NO \[0m
+2026-11-21T12:32:29.5439270Z [36;1m  CODE_SIGNING_REQUIRED=NO \[0m
+2026-11-21T12:32:29.5439610Z [36;1m  CODE_SIGN_IDENTITY="" \[0m
+2026-11-21T12:32:29.5439910Z [36;1m  ENABLE_BITCODE=NO \[0m
+2026-11-21T12:32:29.5440280Z [36;1m  build 2>&1 | tee build.log | tail -n 300[0m
+2026-11-21T12:32:29.5521890Z shell: /bin/bash -e {0}
+2026-11-21T12:32:29.5522190Z ##[endgroup]
+2026-11-21T12:33:04.0293390Z 
+2026-11-21T12:33:04.0303850Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/alloca-1ZKR3F8FV55SO6KHCUYKOF53I.scan
+2026-11-21T12:33:04.0322130Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0322990Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/alloca-1ZKR3F8FV55SO6KHCUYKOF53I.scan
+2026-11-21T12:33:04.0325160Z 
+2026-11-21T12:33:04.0325760Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_ctype-4VNU023PVBI1PRSS3L3QF6L72.scan
+2026-11-21T12:33:04.0326600Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0341050Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_ctype-4VNU023PVBI1PRSS3L3QF6L72.scan
+2026-11-21T12:33:04.0353160Z 
+2026-11-21T12:33:04.0355020Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_locale-97UUFFXAR9JDTN4HVQF6E6Y05.scan
+2026-11-21T12:33:04.0356970Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0359440Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_locale-97UUFFXAR9JDTN4HVQF6E6Y05.scan
+2026-11-21T12:33:04.0361080Z 
+2026-11-21T12:33:04.0362230Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_tgmath-2JGS52VJN3DMHST0WOPE56EQX.scan
+2026-11-21T12:33:04.0363110Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0364210Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_tgmath-2JGS52VJN3DMHST0WOPE56EQX.scan
+2026-11-21T12:33:04.0364860Z 
+2026-11-21T12:33:04.0365500Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdint-3TCLX3APU0Z8TY24EJMYV70XC.scan
+2026-11-21T12:33:04.0366250Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0367110Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdint-3TCLX3APU0Z8TY24EJMYV70XC.scan
+2026-11-21T12:33:04.0367950Z 
+2026-11-21T12:33:04.0368510Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/__wctype-EYLZEZQLYW1FPWBVQ2TXGMV0Y.scan
+2026-11-21T12:33:04.0369350Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0370170Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/__wctype-EYLZEZQLYW1FPWBVQ2TXGMV0Y.scan
+2026-11-21T12:33:04.0379370Z 
+2026-11-21T12:33:04.0380150Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/xlocale-D5PZ3F28PFZ5B3KGFSLG1R9KV.scan
+2026-11-21T12:33:04.0381020Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0382380Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/xlocale-D5PZ3F28PFZ5B3KGFSLG1R9KV.scan
+2026-11-21T12:33:04.0383080Z 
+2026-11-21T12:33:04.0383600Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_inttypes-C7OQXMXODWEXU1AY9UHU9X6QV.scan
+2026-11-21T12:33:04.0384300Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0385100Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_inttypes-C7OQXMXODWEXU1AY9UHU9X6QV.scan
+2026-11-21T12:33:04.0385840Z 
+2026-11-21T12:33:04.0386290Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wctype-EUOMY0TMXODJGJZMCXVR8QDAW.scan
+2026-11-21T12:33:04.0387310Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0388130Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wctype-EUOMY0TMXODJGJZMCXVR8QDAW.scan
+2026-11-21T12:33:04.0388740Z 
+2026-11-21T12:33:04.0389210Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-BMGPJVSEBZMWH5I79QS4ZZRK2.scan
+2026-11-21T12:33:04.0390050Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0390840Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-BMGPJVSEBZMWH5I79QS4ZZRK2.scan
+2026-11-21T12:33:04.0391510Z 
+2026-11-21T12:33:04.0486120Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdatomic-8E2G7GHXB0YJIKGA5FL1XNFE7.scan
+2026-11-21T12:33:04.0487180Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0487940Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_stdatomic-8E2G7GHXB0YJIKGA5FL1XNFE7.scan
+2026-11-21T12:33:04.0488520Z 
+2026-11-21T12:33:04.0488990Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-4IRLA08CDKAWAA5XDXRHB2VV9.scan
+2026-11-21T12:33:04.0489870Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0490690Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-4IRLA08CDKAWAA5XDXRHB2VV9.scan
+2026-11-21T12:33:04.0491340Z 
+2026-11-21T12:33:04.0491820Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_sys_select-E5J8W93S10HF7XGRB2ORG6IKX.scan
+2026-11-21T12:33:04.0492640Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0493470Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_sys_select-E5J8W93S10HF7XGRB2ORG6IKX.scan
+2026-11-21T12:33:04.0494100Z 
+2026-11-21T12:33:04.0494540Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_types-B6X1WQTN28RT5NXD5T6VIW9RS.scan
+2026-11-21T12:33:04.0495290Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0496500Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_types-B6X1WQTN28RT5NXD5T6VIW9RS.scan
+2026-11-21T12:33:04.0497060Z 
+2026-11-21T12:33:04.0497580Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_signal-AG2H54IFTFVUN81517WFA1NK1.scan
+2026-11-21T12:33:04.0498400Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0499190Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_signal-AG2H54IFTFVUN81517WFA1NK1.scan
+2026-11-21T12:33:04.0499790Z 
+2026-11-21T12:33:04.0500320Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_string-3NZER6WYQM5MZ3XFPIRGWFDKK.scan
+2026-11-21T12:33:04.0500980Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0501730Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_string-3NZER6WYQM5MZ3XFPIRGWFDKK.scan
+2026-11-21T12:33:04.0502260Z 
+2026-11-21T12:33:04.0502780Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_resource-E9M548UYMAC3YPXPTWUSN1W6D.scan
+2026-11-21T12:33:04.0503620Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0504310Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_resource-E9M548UYMAC3YPXPTWUSN1W6D.scan
+2026-11-21T12:33:04.0504850Z 
+2026-11-21T12:33:04.0505270Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_time-6F3AYA7MNPWSN7I4MWMJOA326.scan
+2026-11-21T12:33:04.0505920Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0506600Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_time-6F3AYA7MNPWSN7I4MWMJOA326.scan
+2026-11-21T12:33:04.0507110Z 
+2026-11-21T12:33:04.0507600Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/nl_types-K7JTNIYFAJVVW4DEKV8RJN50.scan
+2026-11-21T12:33:04.0508200Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0508900Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/nl_types-K7JTNIYFAJVVW4DEKV8RJN50.scan
+2026-11-21T12:33:04.0509480Z 
+2026-11-21T12:33:04.0509970Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdio-4F6ZUEGMZ9B5MZNHLXIU2301U.scan
+2026-11-21T12:33:04.0510630Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0511380Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdio-4F6ZUEGMZ9B5MZNHLXIU2301U.scan
+2026-11-21T12:33:04.0511950Z 
+2026-11-21T12:33:04.0512370Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_wait-20O17GUJBQ6DEM2B0A7D26MLC.scan
+2026-11-21T12:33:04.0513050Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0513800Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_wait-20O17GUJBQ6DEM2B0A7D26MLC.scan
+2026-11-21T12:33:04.0514400Z 
+2026-11-21T12:33:04.0514900Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/pthread-5M60GQO2XHKP2N6GMPA7D2Q3L.scan
+2026-11-21T12:33:04.0515560Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0516750Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/pthread-5M60GQO2XHKP2N6GMPA7D2Q3L.scan
+2026-11-21T12:33:04.0517580Z 
+2026-11-21T12:33:04.0518170Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_select-AYCJI5KJ31J47HRDPVM3NDKNM.scan
+2026-11-21T12:33:04.0518840Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0519540Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_select-AYCJI5KJ31J47HRDPVM3NDKNM.scan
+2026-11-21T12:33:04.0520120Z 
+2026-11-21T12:33:04.0520600Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wchar-2CCUFEOG8LTPZ904ABC58UBTQ.scan
+2026-11-21T12:33:04.0521230Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0521960Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wchar-2CCUFEOG8LTPZ904ABC58UBTQ.scan
+2026-11-21T12:33:04.0522530Z 
+2026-11-21T12:33:04.0523010Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdlib-AS0KS82N5DK90CPXFXD9WCWX4.scan
+2026-11-21T12:33:04.0523820Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0524550Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdlib-AS0KS82N5DK90CPXFXD9WCWX4.scan
+2026-11-21T12:33:04.0525170Z 
+2026-11-21T12:33:04.0525670Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/gethostuuid-25RKWDXQMJ0Q1WJRP4AXFZ8OE.scan
+2026-11-21T12:33:04.0526290Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0527030Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/gethostuuid-25RKWDXQMJ0Q1WJRP4AXFZ8OE.scan
+2026-11-21T12:33:04.0527620Z 
+2026-11-21T12:33:04.0528050Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/unistd-93KP75NRXSQKELDTJS1QMYQ8Y.scan
+2026-11-21T12:33:04.0528700Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0529630Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/unistd-93KP75NRXSQKELDTJS1QMYQ8Y.scan
+2026-11-21T12:33:04.0530300Z 
+2026-11-21T12:33:04.0530790Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Darwin-8A38IZ5Q5U1IL3ZKFZA0MNWNB.scan
+2026-11-21T12:33:04.0531500Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0532310Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Darwin-8A38IZ5Q5U1IL3ZKFZA0MNWNB.scan
+2026-11-21T12:33:04.0535900Z 
+2026-11-21T12:33:04.0536480Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ObjectiveC-1UNV9J6XDVEO1995R7X2G262O.scan
+2026-11-21T12:33:04.0537380Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0538250Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/ObjectiveC-1UNV9J6XDVEO1995R7X2G262O.scan
+2026-11-21T12:33:04.0538850Z 
+2026-11-21T12:33:04.0539300Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-8T5FBEQF5KFQAVC13NO7V63OZ.scan
+2026-11-21T12:33:04.0539990Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0540930Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-8T5FBEQF5KFQAVC13NO7V63OZ.scan
+2026-11-21T12:33:04.0541490Z 
+2026-11-21T12:33:04.0541990Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-3UQEUJEBSH811YGHXALRBKSAK.scan
+2026-11-21T12:33:04.0542620Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0543430Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-3UQEUJEBSH811YGHXALRBKSAK.scan
+2026-11-21T12:33:04.0544030Z 
+2026-11-21T12:33:04.0544600Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-BKIAOA9M41V0PSYFVW5RHWBBD.scan
+2026-11-21T12:33:04.0545210Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0545960Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-BKIAOA9M41V0PSYFVW5RHWBBD.scan
+2026-11-21T12:33:04.0546560Z 
+2026-11-21T12:33:04.0547040Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/XPC-EYOITKBOYEPRQ6SNNM1RI1DGE.scan
+2026-11-21T12:33:04.0547840Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0551840Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/XPC-EYOITKBOYEPRQ6SNNM1RI1DGE.scan
+2026-11-21T12:33:04.0552450Z 
+2026-11-21T12:33:04.0552930Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreFoundation-CBU5SRK7UGL5VB6NVK2FOGQUB.scan
+2026-11-21T12:33:04.0553740Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0554440Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CoreFoundation-CBU5SRK7UGL5VB6NVK2FOGQUB.scan
+2026-11-21T12:33:04.0555020Z 
+2026-11-21T12:33:04.0555620Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Security-ETQFTH8GG8MNJ7L63BK7XAIOI.scan
+2026-11-21T12:33:04.0556340Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0557180Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Security-ETQFTH8GG8MNJ7L63BK7XAIOI.scan
+2026-11-21T12:33:04.0557720Z 
+2026-11-21T12:33:04.0558330Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CFNetwork-3MI26NSYJI70SFHTLVKNX8BD7.scan
+2026-11-21T12:33:04.0561650Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0562410Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/CFNetwork-3MI26NSYJI70SFHTLVKNX8BD7.scan
+2026-11-21T12:33:04.0562960Z 
+2026-11-21T12:33:04.0563500Z PrecompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Foundation-2ZJS717GQZK2IIWCW32CRU9GR.scan
+2026-11-21T12:33:04.0564140Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0564890Z     builtin-precompileModule /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ExplicitPrecompiledModules/Foundation-2ZJS717GQZK2IIWCW32CRU9GR.scan
+2026-11-21T12:33:04.0565550Z 
+2026-11-21T12:33:04.0566680Z CompileC /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/Pods-ZhuJu-dummy.o /Users/runner/work/zhuju-player/zhuju-player/Pods/Target\ Support\ Files/Pods-ZhuJu/Pods-ZhuJu-dummy.m normal arm64 objective-c com.apple.compilers.llvm.clang.1_0.compiler (in target 'Pods-ZhuJu' from project 'Pods')
+2026-11-21T12:33:04.0568310Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0568690Z     
+2026-11-21T12:33:04.0569480Z     Using response file: /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/e6072d4f65d7061329687fe24e3d63a7-common-args.resp
+2026-11-21T12:33:04.0570380Z     
+2026-11-21T12:33:04.0578360Z     /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -x objective-c -ivfsstatcache /Users/runner/work/zhuju-player/zhuju-player/build/SDKStatCaches.noindex/iphoneos18.5-22F76-a529daf784b3616c7c04a36aeb7f5c05.sdkstatcache -fmessage-length\=0 -fdiagnostics-show-note-include-stack -fmacro-backtrace-limit\=0 -fno-color-diagnostics -fmodules-prune-interval\=86400 -fmodules-prune-after\=345600 -fbuild-session-file\=/Users/runner/work/zhuju-player/zhuju-player/build/ModuleCache.noindex/Session.modulevalidation -fmodules-validate-once-per-build-session -Wnon-modular-include-in-framework-module -Werror\=non-modular-include-in-framework-module -Wno-trigraphs -Wno-missing-field-initializers -Wno-missing-prototypes -Werror\=return-type -Wdocumentation -Wunreachable-code -Wno-implicit-atomic-properties -Werror\=deprecated-objc-isa-usage -Wno-objc-interface-ivars -Werror\=objc-root-class -Wno-arc-repeated-use-of-weak -Wimplicit-retain-self -Wduplicate-method-match -Wno-missing-braces -Wparentheses -Wswitch -Wunused-function -Wno-unused-label -Wno-unused-parameter -Wunused-variable -Wunused-value -Wempty-body -Wuninitialized -Wconditional-uninitialized -Wno-unknown-pragmas -Wno-shadow -Wno-four-char-constants -Wno-conversion -Wconstant-conversion -Wint-conversion -Wbool-conversion -Wenum-conversion -Wno-float-conversion -Wnon-literal-null-conversion -Wobjc-literal-conversion -Wshorten-64-to-32 -Wpointer-sign -Wno-newline-eof -Wno-selector -Wno-strict-selector-match -Wundeclared-selector -Wdeprecated-implementations -Wno-implicit-fallthrough -fstrict-aliasing -Wprotocol -Wdeprecated-declarations -Wno-sign-conversion -Winfinite-recursion -Wcomma -Wblock-capture-autoreleasing -Wstrict-prototypes -Wno-semicolon-before-method-body -Wunguarded-availability @/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/e6072d4f65d7061329687fe24e3d63a7-common-args.resp -MMD -MT dependencies -MF /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/Pods-ZhuJu-dummy.d --serialize-diagnostics /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/Pods-ZhuJu-dummy.dia -c /Users/runner/work/zhuju-player/zhuju-player/Pods/Target\ Support\ Files/Pods-ZhuJu/Pods-ZhuJu-dummy.m -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/Pods-ZhuJu-dummy.o
+2026-11-21T12:33:04.0586750Z 
+2026-11-21T12:33:04.0587290Z Libtool /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/Pods_ZhuJu.framework/Pods_ZhuJu normal (in target 'Pods-ZhuJu' from project 'Pods')
+2026-11-21T12:33:04.0587990Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0590800Z     /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/libtool -static -arch_only arm64 -D -syslibroot /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.5.sdk -L/Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos -filelist /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/Pods_ZhuJu.LinkFileList -framework Foundation -dependency_info /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos/Pods-ZhuJu.build/Objects-normal/arm64/Pods_ZhuJu_libtool_dependency_info.dat -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/Pods_ZhuJu.framework/Pods_ZhuJu
+2026-11-21T12:33:04.0593220Z 
+2026-11-21T12:33:04.0593700Z RegisterExecutionPolicyException /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/Pods_ZhuJu.framework (in target 'Pods-ZhuJu' from project 'Pods')
+2026-11-21T12:33:04.0594400Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0595050Z     builtin-RegisterExecutionPolicyException /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/Pods_ZhuJu.framework
+2026-11-21T12:33:04.0595520Z 
+2026-11-21T12:33:04.0596000Z Touch /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/Pods_ZhuJu.framework (in target 'Pods-ZhuJu' from project 'Pods')
+2026-11-21T12:33:04.0596580Z     cd /Users/runner/work/zhuju-player/zhuju-player/Pods
+2026-11-21T12:33:04.0597080Z     /usr/bin/touch -c /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/Pods_ZhuJu.framework
+2026-11-21T12:33:04.0597500Z 
+2026-11-21T12:33:04.0598650Z PhaseScriptExecution [CP]\ Check\ Pods\ Manifest.lock /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Script-38E9888DE89D3CAF44517DE9.sh (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0599600Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0600370Z     /bin/sh -c /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Script-38E9888DE89D3CAF44517DE9.sh
+2026-11-21T12:33:04.0600990Z 
+2026-11-21T12:33:04.0601630Z MkDir /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/thinned (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0602630Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0603480Z     /bin/mkdir -p /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/thinned
+2026-11-21T12:33:04.0604110Z 
+2026-11-21T12:33:04.0604790Z MkDir /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/unthinned (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0605700Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0606430Z     /bin/mkdir -p /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/unthinned
+2026-11-21T12:33:04.0607100Z 
+2026-11-21T12:33:04.0607530Z GenerateAssetSymbols /Users/runner/work/zhuju-player/zhuju-player/Sources/Assets.xcassets (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0608120Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0612780Z     /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/actool /Users/runner/work/zhuju-player/zhuju-player/Sources/Assets.xcassets --compile /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/ZhuJu.app --output-format human-readable-text --notices --warnings --export-dependency-info /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_dependencies --output-partial-info-plist /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_generated_info.plist --app-icon AppIcon --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 16.4 --platform iphoneos --bundle-identifier com.zhuju.player --generate-swift-asset-symbol-extensions NO --generate-swift-asset-symbols /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols.swift --generate-objc-asset-symbols /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols.h --generate-asset-symbol-index /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+2026-11-21T12:33:04.0617540Z /* com.apple.actool.compilation-results */
+2026-11-21T12:33:04.0618210Z /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+2026-11-21T12:33:04.0619300Z /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols.h
+2026-11-21T12:33:04.0620360Z /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols.swift
+2026-11-21T12:33:04.0620850Z 
+2026-11-21T12:33:04.0621150Z 
+2026-11-21T12:33:04.0621810Z CompileAssetCatalogVariant thinned /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/ZhuJu.app /Users/runner/work/zhuju-player/zhuju-player/Sources/Assets.xcassets (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0622730Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0625740Z     /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/actool /Users/runner/work/zhuju-player/zhuju-player/Sources/Assets.xcassets --compile /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_generated_info.plist_thinned --app-icon AppIcon --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 16.4 --platform iphoneos
+2026-11-21T12:33:04.0628610Z /* com.apple.actool.compilation-results */
+2026-11-21T12:33:04.0629260Z /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_generated_info.plist_thinned
+2026-11-21T12:33:04.0630290Z /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/thinned/AppIcon60x60@2x.png
+2026-11-21T12:33:04.0631360Z /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/thinned/AppIcon76x76@2x~ipad.png
+2026-11-21T12:33:04.0632330Z /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/thinned/Assets.car
+2026-11-21T12:33:04.0632860Z 
+2026-11-21T12:33:04.0632870Z 
+2026-11-21T12:33:04.0633120Z SwiftDriver ZhuJu normal arm64 com.apple.xcode.tools.swift.compiler (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0633640Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0646230Z     builtin-SwiftDriver -- /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name ZhuJu -O -whole-module-optimization -enforce-exclusivity\=checked @/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu.SwiftFileList -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.5.sdk -target arm64-apple-ios16.4 -g -module-cache-path /Users/runner/work/zhuju-player/zhuju-player/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -swift-version 5 -I /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos -F /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos -F /Users/runner/work/zhuju-player/zhuju-player/Pods/MobileVLCKit -F /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/XCFrameworkIntermediates/MobileVLCKit -F ThirdParty -c -num-threads 3 -Xcc -ivfsstatcache -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/SDKStatCaches.noindex/iphoneos18.5-22F76-a529daf784b3616c7c04a36aeb7f5c05.sdkstatcache -output-file-map /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/zhuju-player/zhuju-player/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu_const_extract_protocols.json -Xcc -iquote -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-generated-files.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-own-target-headers.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu-1e106af7e441b4e8864491e9e580fc87-VFS-iphoneos/all-product-headers.yaml -Xcc -iquote -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-project-headers.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/include -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources -Xcc -DCOCOAPODS\=1 -emit-objc-header -emit-objc-header-path /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu-Swift.h -working-directory /Users/runner/work/zhuju-player/zhuju-player -no-emit-module-separately-wmo
+2026-11-21T12:33:04.0658220Z 
+2026-11-21T12:33:04.0666720Z SwiftCompile normal arm64 Compiling\ AppDelegate.swift,\ AudioExtractor.swift,\ BackgroundKeeper.swift,\ Boot.swift,\ FreeTranslator.swift,\ GestureSettingsView.swift,\ JobView.swift,\ LibraryView.swift,\ LiveSettingsView.swift,\ LiveSubtitleEngine.swift,\ LiveTranslator.swift,\ LiveView.swift,\ ModelManager.swift,\ Models.swift,\ PlaybackSettingsView.swift,\ PlayerScreen.swift,\ Prefs.swift,\ Privacy.swift,\ PrivacySettingsView.swift,\ SettingsView.swift,\ SubtitleJob.swift,\ TranslateSettingsView.swift,\ Translator.swift,\ VideoMode.swift,\ VideoSettingsView.swift,\ WhisperEngine.swift,\ ZhuJuApp.swift,\ GeneratedAssetSymbols.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/AppDelegate.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/AudioExtractor.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/BackgroundKeeper.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Boot.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/FreeTranslator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/GestureSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/JobView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LibraryView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LiveSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveTranslator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LiveView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/ModelManager.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Models.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlaybackSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Prefs.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Privacy.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PrivacySettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/SettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/SubtitleJob.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/TranslateSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Translator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/VideoMode.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/VideoSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/WhisperEngine.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/ZhuJuApp.swift /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0675280Z CompileSwift normal arm64 (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0675580Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0675800Z     
+2026-11-21T12:33:04.0676320Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/AudioExtractor.swift:30:23: warning: 'tracks(withMediaType:)' was deprecated in iOS 16.0: Use loadTracks(withMediaType:) instead
+2026-11-21T12:33:04.0677020Z         return !asset.tracks(withMediaType: .audio).isEmpty
+2026-11-21T12:33:04.0677320Z                       ^
+2026-11-21T12:33:04.0677990Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/AudioExtractor.swift:41:33: warning: 'tracks(withMediaType:)' was deprecated in iOS 16.0: Use loadTracks(withMediaType:) instead
+2026-11-21T12:33:04.0678770Z         guard let track = asset.tracks(withMediaType: .audio).first else {
+2026-11-21T12:33:04.0679220Z                                 ^
+2026-11-21T12:33:04.0679790Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/AudioExtractor.swift:45:51: warning: 'duration' was deprecated in iOS 16.0: Use load(.duration) instead
+2026-11-21T12:33:04.0680360Z         let totalSeconds = CMTimeGetSeconds(asset.duration)
+2026-11-21T12:33:04.0680610Z                                                   ^
+2026-11-21T12:33:04.0681470Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift:73:33: warning: 'tracks(withMediaType:)' was deprecated in iOS 16.0: Use loadTracks(withMediaType:) instead
+2026-11-21T12:33:04.0682260Z         guard let track = asset.tracks(withMediaType: .audio).first else {
+2026-11-21T12:33:04.0682710Z                                 ^
+2026-11-21T12:33:04.0683290Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift:189:36: warning: capture of 'self' with non-sendable type 'LiveSubtitleEngine' in a '@Sendable' closure
+2026-11-21T12:33:04.0683960Z                     if let index = self.cues.firstIndex(where: { $0.id == cue.id }) {
+2026-11-21T12:33:04.0684250Z                                    ^
+2026-11-21T12:33:04.0684850Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift:15:13: note: class 'LiveSubtitleEngine' does not conform to the 'Sendable' protocol
+2026-11-21T12:33:04.0685430Z final class LiveSubtitleEngine: ObservableObject {
+2026-11-21T12:33:04.0685760Z             ^
+2026-11-21T12:33:04.0686340Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift:197:21: warning: capture of 'self' with non-sendable type 'LiveSubtitleEngine' in a '@Sendable' closure
+2026-11-21T12:33:04.0695120Z                     self.status = "译文没出来：\(error.localizedDescription)"
+2026-11-21T12:33:04.0695840Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift:15:13: note: class 'LiveSubtitleEngine' does not conform to the 'Sendable' protocol
+2026-11-21T12:33:04.0696590Z final class LiveSubtitleEngine: ObservableObject {
+2026-11-21T12:33:04.0696850Z             ^
+2026-11-21T12:33:04.0697370Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveTranslator.swift:241:21: warning: capture of 'self' with non-sendable type 'LiveTranslator' in a '@Sendable' closure
+2026-11-21T12:33:04.0698100Z                     self.lines.append(LiveLine(original: text, translated: translated))
+2026-11-21T12:33:04.0698520Z                     ^
+2026-11-21T12:33:04.0699010Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveTranslator.swift:13:13: note: class 'LiveTranslator' does not conform to the 'Sendable' protocol
+2026-11-21T12:33:04.0699610Z final class LiveTranslator: ObservableObject {
+2026-11-21T12:33:04.0699860Z             ^
+2026-11-21T12:33:04.0700390Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/ModelManager.swift:57:40: warning: capture of 'self' with non-sendable type 'ModelManager' in a '@Sendable' closure
+2026-11-21T12:33:04.0701080Z             DispatchQueue.main.async { self.progress[id] = value }
+2026-11-21T12:33:04.0701420Z                                        ^
+2026-11-21T12:33:04.0701970Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/ModelManager.swift:11:13: note: class 'ModelManager' does not conform to the 'Sendable' protocol
+2026-11-21T12:33:04.0702530Z final class ModelManager: ObservableObject {
+2026-11-21T12:33:04.0702910Z             ^
+2026-11-21T12:33:04.0703290Z /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift:243:24: error: invalid redeclaration of 'pendingTap'
+2026-11-21T12:33:04.0703810Z     @State private var pendingTap: DispatchWorkItem?
+2026-11-21T12:33:04.0704040Z                        ^
+2026-11-21T12:33:04.0704440Z /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift:229:24: note: 'pendingTap' previously declared here
+2026-11-21T12:33:04.0704930Z     @State private var pendingTap: DispatchWorkItem?
+2026-11-21T12:33:04.0705140Z                        ^
+2026-11-21T12:33:04.0705540Z /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift:229:24: note: 'pendingTap' previously declared here
+2026-11-21T12:33:04.0706010Z     @State private var pendingTap: DispatchWorkItem?
+2026-11-21T12:33:04.0706240Z                        ^
+2026-11-21T12:33:04.0706700Z /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift:243:24: error: invalid redeclaration of synthesized property '$pendingTap'
+2026-11-21T12:33:04.0707300Z     @State private var pendingTap: DispatchWorkItem?
+2026-11-21T12:33:04.0707520Z                        ^
+2026-11-21T12:33:04.0708130Z /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift:229:24: note: '$pendingTap' synthesized for property wrapper projected value
+2026-11-21T12:33:04.0708670Z     @State private var pendingTap: DispatchWorkItem?
+2026-11-21T12:33:04.0708890Z                        ^
+2026-11-21T12:33:04.0709360Z /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift:243:24: error: invalid redeclaration of synthesized property '_pendingTap'
+2026-11-21T12:33:04.0709920Z     @State private var pendingTap: DispatchWorkItem?
+2026-11-21T12:33:04.0710140Z                        ^
+2026-11-21T12:33:04.0710620Z /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift:229:24: note: '_pendingTap' synthesized for property wrapper backing storage
+2026-11-21T12:33:04.0711180Z     @State private var pendingTap: DispatchWorkItem?
+2026-11-21T12:33:04.0711420Z                        ^
+2026-11-21T12:33:04.0712060Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/SubtitleJob.swift:162:25: warning: capture of 'engine' with non-sendable type 'WhisperEngine' in a '@Sendable' closure
+2026-11-21T12:33:04.0712910Z                         engine.transcribe(samples: samples, offset: offset, language: language) { cue in
+2026-11-21T12:33:04.0713270Z                         ^
+2026-11-21T12:33:04.0714000Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/WhisperEngine.swift:5:13: note: class 'WhisperEngine' does not conform to the 'Sendable' protocol
+2026-11-21T12:33:04.0714530Z final class WhisperEngine {
+2026-11-21T12:33:04.0714700Z             ^
+2026-11-21T12:33:04.0715210Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/SubtitleJob.swift:168:25: warning: capture of 'self' with non-sendable type 'SubtitleJob' in a '@Sendable' closure
+2026-11-21T12:33:04.0715830Z                         self.apply(progress: base + span * value)
+2026-11-21T12:33:04.0716070Z                         ^
+2026-11-21T12:33:04.0716550Z /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/SubtitleJob.swift:4:13: note: class 'SubtitleJob' does not conform to the 'Sendable' protocol
+2026-11-21T12:33:04.0717180Z final class SubtitleJob: ObservableObject {
+2026-11-21T12:33:04.0717390Z             ^
+2026-11-21T12:33:04.0717480Z 
+2026-11-21T12:33:04.0717540Z Failed frontend command:
+2026-11-21T12:33:04.0762070Z /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-frontend -frontend -c /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/AppDelegate.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/AudioExtractor.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/BackgroundKeeper.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Boot.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/FreeTranslator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/GestureSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/JobView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LibraryView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LiveSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveTranslator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LiveView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/ModelManager.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Models.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlaybackSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Prefs.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Privacy.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PrivacySettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/SettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/SubtitleJob.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/TranslateSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Translator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/VideoMode.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/VideoSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/WhisperEngine.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/ZhuJuApp.swift /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols.swift -supplementary-output-file-map /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/supplementaryOutputs-1 -target arm64-apple-ios16.4 -Xllvm -aarch64-use-tbi -enable-objc-interop -stack-check -sdk /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.5.sdk -I /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos -F /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos -F /Users/runner/work/zhuju-player/zhuju-player/Pods/MobileVLCKit -F /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/XCFrameworkIntermediates/MobileVLCKit -F /Users/runner/work/zhuju-player/zhuju-player/ThirdParty -no-color-diagnostics -g -debug-info-format\=dwarf -dwarf-version\=4 -module-cache-path /Users/runner/work/zhuju-player/zhuju-player/build/ModuleCache.noindex -swift-version 5 -enforce-exclusivity\=checked -O -serialize-debugging-options -const-gather-protocols-file /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu_const_extract_protocols.json -enable-experimental-feature DebugDescriptionMacro -enable-bare-slash-regex -empty-abi-descriptor -validate-clang-modules-once -clang-build-session-file /Users/runner/work/zhuju-player/zhuju-player/build/ModuleCache.noindex/Session.modulevalidation -Xcc -working-directory -Xcc /Users/runner/work/zhuju-player/zhuju-player -resource-dir /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift -file-compilation-dir /Users/runner/work/zhuju-player/zhuju-player -Xcc -ivfsstatcache -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/SDKStatCaches.noindex/iphoneos18.5-22F76-a529daf784b3616c7c04a36aeb7f5c05.sdkstatcache -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/swift-overrides.hmap -Xcc -iquote -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-generated-files.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-own-target-headers.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu-1e106af7e441b4e8864491e9e580fc87-VFS-iphoneos/all-product-headers.yaml -Xcc -iquote -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-project-headers.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/include -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources -Xcc -DCOCOAPODS\=1 -module-name ZhuJu -frontend-parseable-output -disable-clang-spi -target-sdk-version 18.5 -target-sdk-name iphoneos18.5 -external-plugin-path /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/swift/host/plugins\#/Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server -external-plugin-path /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/local/lib/swift/host/plugins\#/Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/swift-plugin-server -in-process-plugin-server-path /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/libSwiftInProcPluginServer.dylib -plugin-path /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins -plugin-path /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/local/lib/swift/host/plugins -enable-default-cmo -num-threads 3 -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/AppDelegate.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/AudioExtractor.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/BackgroundKeeper.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Boot.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/FreeTranslator.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/GestureSettingsView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/JobView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LibraryView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveSettingsView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveSubtitleEngine.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveTranslator.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ModelManager.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Models.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/PlaybackSettingsView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/PlayerScreen.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Prefs.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Privacy.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/PrivacySettingsView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/SettingsView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/SubtitleJob.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/TranslateSettingsView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Translator.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/VideoMode.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/VideoSettingsView.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/WhisperEngine.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJuApp.o -o /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/GeneratedAssetSymbols.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/AppDelegate.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/AudioExtractor.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/BackgroundKeeper.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Boot.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/FreeTranslator.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/GestureSettingsView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/JobView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LibraryView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveSettingsView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveSubtitleEngine.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveTranslator.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/LiveView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ModelManager.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Models.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/PlaybackSettingsView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/PlayerScreen.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Prefs.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Privacy.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/PrivacySettingsView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/SettingsView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/SubtitleJob.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/TranslateSettingsView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/Translator.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/VideoMode.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/VideoSettingsView.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/WhisperEngine.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJuApp.o -index-unit-output-path /ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/GeneratedAssetSymbols.o
+2026-11-21T12:33:04.0806920Z SwiftDriver\ Compilation ZhuJu normal arm64 com.apple.xcode.tools.swift.compiler (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0807420Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0820010Z     builtin-Swift-Compilation -- /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name ZhuJu -O -whole-module-optimization -enforce-exclusivity\=checked @/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu.SwiftFileList -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.5.sdk -target arm64-apple-ios16.4 -g -module-cache-path /Users/runner/work/zhuju-player/zhuju-player/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -swift-version 5 -I /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos -F /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos -F /Users/runner/work/zhuju-player/zhuju-player/Pods/MobileVLCKit -F /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/XCFrameworkIntermediates/MobileVLCKit -F ThirdParty -c -num-threads 3 -Xcc -ivfsstatcache -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/SDKStatCaches.noindex/iphoneos18.5-22F76-a529daf784b3616c7c04a36aeb7f5c05.sdkstatcache -output-file-map /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/zhuju-player/zhuju-player/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu_const_extract_protocols.json -Xcc -iquote -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-generated-files.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-own-target-headers.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu-1e106af7e441b4e8864491e9e580fc87-VFS-iphoneos/all-product-headers.yaml -Xcc -iquote -Xcc /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/ZhuJu-project-headers.hmap -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/include -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources -Xcc -DCOCOAPODS\=1 -emit-objc-header -emit-objc-header-path /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/Objects-normal/arm64/ZhuJu-Swift.h -working-directory /Users/runner/work/zhuju-player/zhuju-player -no-emit-module-separately-wmo
+2026-11-21T12:33:04.0832700Z 
+2026-11-21T12:33:04.0833150Z LinkAssetCatalog /Users/runner/work/zhuju-player/zhuju-player/Sources/Assets.xcassets (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0833780Z     cd /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:04.0838270Z     builtin-linkAssetCatalog --thinned /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/thinned --thinned-dependencies /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_dependencies_thinned --thinned-info-plist-content /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_generated_info.plist_thinned --unthinned /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_output/unthinned --unthinned-dependencies /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_dependencies_unthinned --unthinned-info-plist-content /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_generated_info.plist_unthinned --output /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/ZhuJu.app --plist-output /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/assetcatalog_generated_info.plist
+2026-11-21T12:33:04.0843410Z note: Emplaced /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/ZhuJu.app/AppIcon76x76@2x~ipad.png (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0844530Z note: Emplaced /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/ZhuJu.app/AppIcon60x60@2x.png (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0845590Z note: Emplaced /Users/runner/work/zhuju-player/zhuju-player/build/Build/Products/Release-iphoneos/ZhuJu.app/Assets.car (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0846130Z 
+2026-11-21T12:33:04.0846670Z note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'MobileVLCKit' from project 'Pods')
+2026-11-21T12:33:04.0847570Z note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'Pods-ZhuJu' from project 'Pods')
+2026-11-21T12:33:04.0851600Z note: Disabling previews because SWIFT_VERSION is set and SWIFT_OPTIMIZATION_LEVEL=-O, expected -Onone (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0852460Z ** BUILD FAILED **
+2026-11-21T12:33:04.0852690Z 
+2026-11-21T12:33:04.0852700Z 
+2026-11-21T12:33:04.0852920Z The following build commands failed:
+2026-11-21T12:33:04.0853400Z 	CompileSwift normal arm64 (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0863570Z 	SwiftCompile normal arm64 Compiling\ AppDelegate.swift,\ AudioExtractor.swift,\ BackgroundKeeper.swift,\ Boot.swift,\ FreeTranslator.swift,\ GestureSettingsView.swift,\ JobView.swift,\ LibraryView.swift,\ LiveSettingsView.swift,\ LiveSubtitleEngine.swift,\ LiveTranslator.swift,\ LiveView.swift,\ ModelManager.swift,\ Models.swift,\ PlaybackSettingsView.swift,\ PlayerScreen.swift,\ Prefs.swift,\ Privacy.swift,\ PrivacySettingsView.swift,\ SettingsView.swift,\ SubtitleJob.swift,\ TranslateSettingsView.swift,\ Translator.swift,\ VideoMode.swift,\ VideoSettingsView.swift,\ WhisperEngine.swift,\ ZhuJuApp.swift,\ GeneratedAssetSymbols.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/AppDelegate.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/AudioExtractor.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/BackgroundKeeper.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Boot.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/FreeTranslator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/GestureSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/JobView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LibraryView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LiveSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveSubtitleEngine.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/LiveTranslator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/LiveView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/ModelManager.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Models.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlaybackSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PlayerScreen.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Prefs.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Privacy.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/PrivacySettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/SettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/SubtitleJob.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/TranslateSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/Translator.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/VideoMode.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/VideoSettingsView.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/Core/WhisperEngine.swift /Users/runner/work/zhuju-player/zhuju-player/Sources/UI/ZhuJuApp.swift /Users/runner/work/zhuju-player/zhuju-player/build/Build/Intermediates.noindex/ZhuJu.build/Release-iphoneos/ZhuJu.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'ZhuJu' from project 'ZhuJu')
+2026-11-21T12:33:04.0887880Z 	Building workspace ZhuJu with scheme ZhuJu and configuration Release
+2026-11-21T12:33:04.0889050Z (3 failures)
+2026-11-21T12:33:04.0917200Z ##[error]Process completed with exit code 65.
+2026-11-21T12:33:04.1063330Z ##[group]Run actions/upload-artifact@v4
+2026-11-21T12:33:04.1063590Z with:
+2026-11-21T12:33:04.1063730Z   name: build-log-macos-15
+2026-11-21T12:33:04.1063900Z   path: build.log
+2026-11-21T12:33:04.1064050Z   if-no-files-found: ignore
+2026-11-21T12:33:04.1064220Z   retention-days: 7
+2026-11-21T12:33:04.1064370Z   compression-level: 6
+2026-11-21T12:33:04.1064520Z   overwrite: false
+2026-11-21T12:33:04.1064670Z   include-hidden-files: false
+2026-11-21T12:33:04.1064850Z ##[endgroup]
+2026-11-21T12:33:04.5149500Z (node:9556) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-21T12:33:04.5150200Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-21T12:33:04.5186360Z With the provided path, there will be 1 file uploaded
+2026-11-21T12:33:04.5188790Z Artifact name is valid!
+2026-11-21T12:33:04.5189060Z Root directory input is valid!
+2026-11-21T12:33:04.7362290Z Beginning upload of artifact content to blob storage
+2026-11-21T12:33:04.7595130Z (node:9556) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-21T12:33:04.8206620Z Uploaded bytes 10879
+2026-11-21T12:33:04.8394210Z Finished uploading artifact content to blob storage!
+2026-11-21T12:33:04.8395180Z SHA256 digest of uploaded artifact zip is bb7c0ce6120347c290db77ce8b993325bdc98638f18deba7d5629912c24518c5
+2026-11-21T12:33:04.8395720Z Finalizing artifact upload
+2026-11-21T12:33:05.1935010Z Artifact build-log-macos-15.zip successfully finalized. Artifact ID 14706748068
+2026-11-21T12:33:05.1935640Z Artifact build-log-macos-15 has been successfully uploaded! Final size is 10879 bytes. Artifact ID is 14706748068
+2026-11-21T12:33:05.1944390Z Artifact download URL: https://github.com/minfeitang996-star/zhuju-player/actions/runs/44904319713/artifacts/14706748068
+2026-11-21T12:33:05.2112530Z Post job cleanup.
+2026-11-21T12:33:05.3213910Z [command]/opt/homebrew/bin/git version
+2026-11-21T12:33:05.3473300Z git version 2.56.1
+2026-11-21T12:33:05.3512810Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/7b0541e5-658b-469c-815b-d93c80e6b889/.gitconfig'
+2026-11-21T12:33:05.3537760Z Temporarily overriding HOME='/Users/runner/work/_temp/7b0541e5-658b-469c-815b-d93c80e6b889' before making global git config changes
+2026-11-21T12:33:05.3539470Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-21T12:33:05.3540590Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/zhuju-player/zhuju-player
+2026-11-21T12:33:05.3649240Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-21T12:33:05.3715440Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-21T12:33:05.4709590Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-21T12:33:05.4805360Z http.https://github.com/.extraheader
+2026-11-21T12:33:05.4815160Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-21T12:33:05.4883710Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-21T12:33:05.6199360Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-21T12:33:05.6285910Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-21T12:33:05.7403050Z Cleaning up orphan processes
+2026-11-21T12:33:05.8575680Z Terminate orphan process: pid (9252) (ibtoold)
+2026-11-21T12:33:06.3913760Z Terminate orphan process: pid (8808) (ibtoold)
+2026-11-21T12:33:06.8431680Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@v4, actions/checkout@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -226,7 +226,6 @@ final class PlayerController: ObservableObject {
 struct PlayerScreen: View {
 
     @State private var current: MediaItem
-    @State private var pendingTap: DispatchWorkItem?
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var library: MediaLibrary
@@ -353,15 +352,15 @@ struct PlayerScreen: View {
         scheduleHide()
     }
 
-    private func playNextIfEnabled() {
+    private func playNextIfEnabled(_ lib: MediaLibrary) {
         guard Prefs.autoNext else { return }
-        guard let next = library.nextVideo(after: current) else {
+        guard let next = lib.nextVideo(after: current) else {
             showHUD("已是最后一个视频")
             return
         }
         controller.close()
         current = next
-        controller.onEnd = { [self] in self.playNextIfEnabled() }
+        controller.onEnd = { [self] in self.playNextIfEnabled(lib) }
         UserDefaults.standard.removeObject(forKey: "resume:\(next.url.lastPathComponent)")
         controller.open(video: next.url, subtitle: next.subtitleURL)
         if liveOn { restartLive() }
@@ -474,7 +473,8 @@ struct PlayerScreen: View {
             layoutTick += 1
         }
         .onAppear {
-            controller.onEnd = { [self] in self.playNextIfEnabled() }
+            let lib = library
+            controller.onEnd = { [self] in self.playNextIfEnabled(lib) }
             controller.open(video: current.url, subtitle: current.subtitleURL)
             switch Prefs.orientation {
             case "landscape":
