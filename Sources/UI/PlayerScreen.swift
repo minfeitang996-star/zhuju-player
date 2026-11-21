@@ -274,7 +274,8 @@ struct PlayerScreen: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var library: MediaLibrary
     @AppStorage("themeID") private var themeID: String = "gold"
-    @AppStorage("liveOverlayVisible") private var liveOverlayVisible: Bool = true
+    @AppStorage("liveStatusVisible") private var liveStatusVisible: Bool = true
+    @AppStorage("liveTextVisible") private var liveTextVisible: Bool = true
     private var theme: AppTheme { AppTheme.current(themeID) }
 
     @StateObject private var controller = PlayerController()
@@ -465,7 +466,7 @@ struct PlayerScreen: View {
                     .transition(.opacity)
             }
 
-            if liveOn, liveOverlayVisible, let liveCue = activeLiveCue {
+            if liveOn, liveTextVisible, let liveCue = activeLiveCue {
                 VStack {
                     Spacer()
                     VStack(spacing: 3) {
@@ -486,7 +487,7 @@ struct PlayerScreen: View {
                 .allowsHitTesting(false)
             }
 
-            if liveOn, liveOverlayVisible {
+            if liveOn, liveStatusVisible {
                 VStack {
                     Text("\(livePairText) · \(liveSub.status) · 已识别 \(liveSub.cues.count) 段")
                         .font(.system(size: 12))
