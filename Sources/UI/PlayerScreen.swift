@@ -552,6 +552,13 @@ struct PlayerScreen: View {
         }
         .onReceive(Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()) { _ in
             layoutTick += 1
+            // 关掉翻译后引擎必须停，防止任何路径把它又带起来
+            if !liveOn, liveSub.running {
+                liveSub.stop()
+            }
+            if !liveOn, !liveSub.cues.isEmpty {
+                liveSub.cues.removeAll()
+            }
         }
         .onAppear {
             // 边看边译默认关闭，必须手动点气泡开启
@@ -630,7 +637,7 @@ struct PlayerScreen: View {
                 } label: {
                     Image(systemName: liveOn ? "text.bubble.fill" : "text.bubble")
                         .font(.system(size: 19))
-                        .foregroundColor(liveOn ? theme.accent : .white.opacity(0.85))
+                        .foregroundColor(liveOn ? theme.accent : .white.opacity(0.5))
                 }
 
                 Button {
@@ -793,7 +800,9 @@ struct PlayerScreen: View {
     private func toggleLive() {
         if liveOn {
             liveSub.stop()
+            liveSub.cues.removeAll()
             liveOn = false
+            showHUD("边看边译：已关闭")
             return
         }
         let modelID = UserDefaults.standard.string(forKey: "modelID") ?? "ggml-base.bin"
@@ -802,6 +811,7 @@ struct PlayerScreen: View {
             return
         }
         liveOn = true
+        showHUD("边看边译：已开启")
         liveSub.start(videoURL: current.url,
                       modelPath: modelURL.path,
                       from: currentSeconds,
