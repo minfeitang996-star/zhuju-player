@@ -259,6 +259,8 @@ struct LibraryView: View {
                 .foregroundColor(.gray.opacity(0.6))
         }
         .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     /// 上次没看完的那一部（跨启动记忆播放）
@@ -295,6 +297,8 @@ struct LibraryView: View {
                 .foregroundColor(.gray.opacity(0.6))
         }
         .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     /// 单个视频看过的进度：0.02~0.98 是有进度，1.0 是已看完
@@ -362,6 +366,8 @@ struct LibraryView: View {
                 .foregroundColor(.gray.opacity(0.6))
         }
         .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var emptyState: some View {
