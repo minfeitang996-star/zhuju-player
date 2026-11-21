@@ -351,8 +351,9 @@ struct PlayerScreen: View {
         current = next
         controller.onEnd = { [self] in self.playNextIfEnabled(lib) }
         UserDefaults.standard.removeObject(forKey: "resume:\(next.url.lastPathComponent)")
+        liveSub.stop()
+        liveOn = false
         controller.open(video: next.url, subtitle: next.subtitleURL)
-        if liveOn { restartLive() }
         scheduleHide()
     }
 
@@ -433,8 +434,9 @@ struct PlayerScreen: View {
         current = next
         controller.onEnd = { [self] in self.playNextIfEnabled(lib) }
         UserDefaults.standard.removeObject(forKey: "resume:\(next.url.lastPathComponent)")
+        liveSub.stop()
+        liveOn = false
         controller.open(video: next.url, subtitle: next.subtitleURL)
-        if liveOn { restartLive() }
         showHUD("自动播下一集：\(next.title)")
     }
 
@@ -552,6 +554,9 @@ struct PlayerScreen: View {
             layoutTick += 1
         }
         .onAppear {
+            // 边看边译默认关闭，必须手动点气泡开启
+            liveSub.stop()
+            liveOn = false
             let lib = library
             controller.onEnd = { [self] in self.playNextIfEnabled(lib) }
             controller.open(video: current.url, subtitle: current.subtitleURL)
