@@ -295,10 +295,18 @@ struct PlayerScreen: View {
     @State private var baseVolume: Float = 1
     @State private var hudText: String?
     @State private var orientationLocked = false
+    @State private var openPanel: PlayPanel?
 
     private enum PlayerSheet: String, Identifiable {
         case job
         case liveSettings
+        var id: String { rawValue }
+    }
+
+    /// 顶栏下拉面板：画质 / 倍速（自绘，避免系统 Menu 反复重建导致闪动、点不中）
+    private enum PlayPanel: String, Identifiable {
+        case aspect
+        case speed
         var id: String { rawValue }
     }
     @State private var videoMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "videoMode") ?? "fill") ?? .fill
@@ -544,6 +552,11 @@ struct PlayerScreen: View {
                     .allowsHitTesting(false)
                 )
             }
+            if openPanel != nil {
+                panelOverlay
+                    .transition(.opacity)
+                    .zIndex(10)
+            }
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
@@ -621,9 +634,9 @@ struct PlayerScreen: View {
             Spacer()
 
             HStack(spacing: 16) {
-                aspectMenu
+                aspectButton
 
-                speedMenu
+                speedButton
 
                 Button {
                     controller.toggleSubtitles()
@@ -746,43 +759,115 @@ struct PlayerScreen: View {
         .padding(.horizontal, 16)
     }
 
-    private var aspectMenu: some View {
-        Menu {
-            ForEach(VideoMode.allCases) { mode in
-                Section(mode.title) {
-                    Button {
-                        select(mode: mode, safeArea: false)
-                    } label: {
-                        Text((videoMode == mode && !videoSafeArea ? "✓ " : "") + mode.title)
-                    }
-                    Button {
-                        select(mode: mode, safeArea: true)
-                    } label: {
-                        Text((videoMode == mode && videoSafeArea ? "✓ " : "") + mode.title + "（Safe Area）")
-                    }
-                }
+    private var aspectButton: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) {
+                openPanel = (openPanel == .aspect) ? nil : .aspect
             }
+            showControls = true
+            hideTask?.cancel()
         } label: {
             Image(systemName: "aspectratio")
                 .font(.system(size: 20))
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(openPanel == .aspect ? theme.accent : .white.opacity(0.9))
         }
     }
 
-    private var speedMenu: some View {
-        Menu {
-            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { value in
-                Button {
-                    controller.setRate(Float(value))
-                } label: {
-                    Text((abs(controller.rate - Float(value)) < 0.01 ? "✓ " : "") + String(format: "%g×", value))
-                }
+    private var speedButton: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) {
+                openPanel = (openPanel == .speed) ? nil : .speed
             }
+            showControls = true
+            hideTask?.cancel()
         } label: {
             Image(systemName: "speedometer")
                 .font(.system(size: 18))
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(openPanel == .speed ? theme.accent : .white.opacity(0.9))
         }
+    }
+
+    /// 自绘下拉卡片：点哪行都直接响应，不会闪
+    private var panelOverlay: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .onTapGesture { closePanel() }
+
+            VStack(alignment: .leading, spacing: 0) {
+                if openPanel == .aspect {
+                    panelRow("适合", active: videoMode == .fit && !videoSafeArea) {
+                        select(mode: .fit, safeArea: false)
+                    }
+                    panelRow("填充", active: videoMode == .fill && !videoSafeArea) {
+                        select(mode: .fill, safeArea: false)
+                    }
+                    panelRow("拉伸", active: videoMode == .stretch && !videoSafeArea) {
+                        select(mode: .stretch, safeArea: false)
+                    }
+                    panelDivider
+                    panelRow("适合 · 避开安全区", active: videoMode == .fit && videoSafeArea) {
+                        select(mode: .fit, safeArea: true)
+                    }
+                    panelRow("填充 · 避开安全区", active: videoMode == .fill && videoSafeArea) {
+                        select(mode: .fill, safeArea: true)
+                    }
+                    panelRow("拉伸 · 避开安全区", active: videoMode == .stretch && videoSafeArea) {
+                        select(mode: .stretch, safeArea: true)
+                    }
+                } else {
+                    ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { value in
+                        panelRow(String(format: "%g×", value),
+                                 active: abs(controller.rate - Float(value)) < 0.01) {
+                            controller.setRate(Float(value))
+                            closePanel()
+                            showHUD("倍速 " + String(format: "%g×", value))
+                        }
+                    }
+                }
+            }
+            .frame(width: 248)
+            .background(Color(white: 0.13).opacity(0.97))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.5), radius: 16, y: 8)
+            .padding(.top, 60)
+            .padding(.trailing, 16)
+        }
+    }
+
+    private func panelRow(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(width: 16)
+                    .opacity(active ? 1 : 0)
+                Text(title)
+                    .font(.system(size: 15))
+                Spacer(minLength: 0)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .frame(height: 46)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var panelDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.14))
+            .frame(height: 1)
+            .padding(.horizontal, 12)
+    }
+
+    private func closePanel() {
+        withAnimation(.easeOut(duration: 0.15)) { openPanel = nil }
+        scheduleHide()
     }
 
     private var currentSeconds: Double {
@@ -894,6 +979,7 @@ struct PlayerScreen: View {
 
     private func scheduleHide() {
         hideTask?.cancel()
+        guard openPanel == nil else { return }
         guard Prefs.autoHideMenu else { return }
         let delay = Prefs.autoHideDelay
         hideTask = Task { @MainActor in
