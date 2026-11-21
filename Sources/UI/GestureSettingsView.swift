@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 设置 →「手势与操作」：手势开关、双击播放/暂停、长按快进、自动播下一集、锁方向按钮
+/// 设置 →「手势与操作」：手势开关、双击播放/暂停、长按快进、自动播下一集
 struct GestureSettingsView: View {
 
     @AppStorage("gestureEnabled") private var gestureEnabled: Bool = true
@@ -9,7 +9,6 @@ struct GestureSettingsView: View {
     @AppStorage("longPressSkip") private var longPressSkip: Bool = true
     @AppStorage("longPressSeconds") private var longPressSeconds: Double = 10
     @AppStorage("autoNext") private var autoNext: Bool = true
-    @AppStorage("showOrientationLock") private var showOrientationLock: Bool = true
 
     private let pressSeconds: [Double] = [10, 20, 30]
 
@@ -44,11 +43,10 @@ struct GestureSettingsView: View {
             }
 
             Section {
-                Toggle("显示锁方向按钮", isOn: $showOrientationLock)
+                Text("屏幕方向在「播放设置 → 屏幕方向」里选：横屏 / 竖屏 / 自动。")
+                    .font(.system(size: 12))
             } header: {
                 Text("屏幕方向")
-            } footer: {
-                Text("打开后播放页控制栏会多一个锁形按钮，点一下锁定当前方向，再点一下恢复自动旋转（跟随「播放设置」里的屏幕方向）。")
             }
         }
         .navigationTitle("手势与操作")

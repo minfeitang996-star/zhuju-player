@@ -291,7 +291,6 @@ struct PlayerScreen: View {
     @State private var dragAxis: String?
     @State private var baseBrightness: CGFloat = 0
     @State private var baseVolume: Float = 1
-    @State private var orientationLocked = false
     @State private var hudText: String?
 
     private enum PlayerSheet: String, Identifiable {
@@ -387,18 +386,6 @@ struct PlayerScreen: View {
                 withAnimation(.easeOut(duration: 0.2)) { self.hudText = nil }
             }
         }
-    }
-
-    private func toggleOrientationLock() {
-        orientationLocked.toggle()
-        if orientationLocked {
-            OrientationHelper.apply(isFullscreen ? .landscapeRight : .portrait)
-            showHUD(isFullscreen ? "已锁定横屏" : "已锁定竖屏")
-        } else {
-            OrientationHelper.apply(isFullscreen ? .landscapeRight : .all)
-            showHUD("已解锁，可自动旋转")
-        }
-        scheduleHide()
     }
 
     private func playNextIfEnabled(_ lib: MediaLibrary) {
@@ -582,17 +569,6 @@ struct PlayerScreen: View {
                     .clipShape(Circle())
             }
 
-            Text(current.title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
-                .lineLimit(1)
-
-            if Prefs.showClock {
-                Text(Date(), style: .time)
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.75))
-            }
-
             Spacer()
 
         }
@@ -635,9 +611,8 @@ struct PlayerScreen: View {
                 Button {
                     controller.togglePlay()
                 } label: {
-                    Image(systemName: controller.playing ? "pause.fill" : "play.fill")
-                        .font(.system(size: 30))
-                        .foregroundColor(.white)
+                    PlayPauseGlyph(playing: controller.playing)
+                        .frame(width: 34, height: 30)
                 }
 
                 Button {
@@ -654,16 +629,6 @@ struct PlayerScreen: View {
                     Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 20))
                         .foregroundColor(.white.opacity(0.9))
-                }
-
-                if Prefs.showOrientationLock {
-                    Button {
-                        toggleOrientationLock()
-                    } label: {
-                        Image(systemName: orientationLocked ? "lock.rotation" : "lock.rotation.open")
-                            .font(.system(size: 20))
-                            .foregroundColor(orientationLocked ? theme.accent : .white.opacity(0.9))
-                    }
                 }
 
                 aspectMenu
@@ -683,15 +648,15 @@ struct PlayerScreen: View {
                     toggleLive()
                 } label: {
                     Image(systemName: liveOn ? "text.bubble.fill" : "text.bubble")
-                        .font(.system(size: 19))
+                        .font(.system(size: 20))
                         .foregroundColor(liveOn ? theme.accent : .white.opacity(0.9))
                 }
 
                 Button {
                     activeSheet = .liveSettings
                 } label: {
-                    Image(systemName: "globe")
-                        .font(.system(size: 19))
+                    Image(systemName: "text.bubble")
+                        .font(.system(size: 20))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
@@ -859,5 +824,39 @@ struct PlayerScreen: View {
         Boot.mark("I fullscreen=\(isFullscreen)")
         OrientationHelper.apply(isFullscreen ? .landscapeRight : .portrait)
         withAnimation(.easeInOut(duration: 0.2)) { showControls = true }
+    }
+}
+
+/// 纯三角形播放键（播放中切换成两条竖杠的暂停）
+struct PlayPauseGlyph: View {
+    let playing: Bool
+
+    var body: some View {
+        ZStack {
+            if playing {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .frame(width: 6, height: 26)
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .frame(width: 6, height: 26)
+                }
+            } else {
+                PlayTriangle()
+                    .fill(Color.white)
+                    .frame(width: 20, height: 24)
+            }
+        }
+        .foregroundColor(.white)
+    }
+}
+
+struct PlayTriangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }
