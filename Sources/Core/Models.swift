@@ -263,6 +263,14 @@ final class MediaLibrary: ObservableObject {
     }
 
     /// 同文件夹里按名称排在当前视频后面的那一个，用来「自动播下一集」
+    /// 同文件夹里按名称排在当前视频前面的那一个
+    func previousVideo(before item: MediaItem) -> MediaItem? {
+        let folder = item.url.deletingLastPathComponent()
+        let list = videos(in: folder)
+        guard let index = list.firstIndex(where: { $0.url.path == item.url.path }), index > 0 else { return nil }
+        return list[index - 1]
+    }
+
     func nextVideo(after item: MediaItem) -> MediaItem? {
         let folder = item.url.deletingLastPathComponent()
         let list = videos(in: folder)

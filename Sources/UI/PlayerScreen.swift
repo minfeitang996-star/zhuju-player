@@ -292,6 +292,7 @@ struct PlayerScreen: View {
     @State private var baseBrightness: CGFloat = 0
     @State private var baseVolume: Float = 1
     @State private var hudText: String?
+    @State private var orientationLocked = false
 
     private enum PlayerSheet: String, Identifiable {
         case job
@@ -329,6 +330,40 @@ struct PlayerScreen: View {
         controller.togglePlay()
         showHUD(controller.playing ? "播放" : "暂停")
         scheduleHide()
+    }
+
+    private func toggleOrientationLock() {
+        orientationLocked.toggle()
+        if orientationLocked {
+            OrientationHelper.apply(isFullscreen ? .landscapeRight : .portrait)
+            showHUD(isFullscreen ? "已锁定横屏" : "已锁定竖屏")
+        } else {
+            OrientationHelper.apply(isFullscreen ? .landscapeRight : .all)
+            showHUD("已解锁，可自动旋转")
+        }
+        scheduleHide()
+    }
+
+    /// 切到同一个文件夹里的上一个 / 下一个视频
+    private func switchTo(_ next: MediaItem) {
+        let lib = library
+        controller.close()
+        current = next
+        controller.onEnd = { [self] in self.playNextIfEnabled(lib) }
+        UserDefaults.standard.removeObject(forKey: "resume:\(next.url.lastPathComponent)")
+        controller.open(video: next.url, subtitle: next.subtitleURL)
+        if liveOn { restartLive() }
+        scheduleHide()
+    }
+
+    private func playNeighbor(forward: Bool) {
+        let target = forward ? library.nextVideo(after: current) : library.previousVideo(before: current)
+        guard let target else {
+            showHUD(forward ? "已经是最后一个视频" : "已经是第一个视频")
+            return
+        }
+        switchTo(target)
+        showHUD((forward ? "下一集：" : "上一集：") + target.title)
     }
 
     /// 长按画面：快进固定秒数（默认 10 秒，可在「手势与操作」里改 10/20/30）
@@ -571,6 +606,38 @@ struct PlayerScreen: View {
 
             Spacer()
 
+            HStack(spacing: 16) {
+                aspectMenu
+
+                speedMenu
+
+                Button {
+                    controller.toggleSubtitles()
+                } label: {
+                    Image(systemName: controller.subtitlesEnabled ? "captions.bubble.fill" : "captions.bubble")
+                        .font(.system(size: 19))
+                        .foregroundColor(controller.subtitlesEnabled ? theme.accent : .white.opacity(0.85))
+                }
+                .disabled(current.subtitleURL == nil)
+
+                Button {
+                    toggleLive()
+                } label: {
+                    Image(systemName: liveOn ? "text.bubble.fill" : "text.bubble")
+                        .font(.system(size: 19))
+                        .foregroundColor(liveOn ? theme.accent : .white.opacity(0.85))
+                }
+
+                Button {
+                    activeSheet = .liveSettings
+                } label: {
+                    Image(systemName: "globe")
+                        .font(.system(size: 19))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+            }
+
+
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
@@ -599,13 +666,29 @@ struct PlayerScreen: View {
                     .foregroundColor(.white.opacity(0.8))
             }
 
-            HStack(spacing: 20) {
+            HStack(spacing: 22) {
+                Button {
+                    toggleOrientationLock()
+                } label: {
+                    Image(systemName: orientationLocked ? "lock.fill" : "lock.open")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+
+                Button {
+                    playNeighbor(forward: false)
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+
                 Button {
                     controller.skip(-Prefs.skipBack)
                 } label: {
-                    Image(systemName: "gobackward")
-                        .font(.system(size: 22))
-                        .foregroundColor(.white.opacity(0.9))
+                    Image(systemName: "backward.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
                 }
 
                 Button {
@@ -618,46 +701,25 @@ struct PlayerScreen: View {
                 Button {
                     controller.skip(Prefs.skipForward)
                 } label: {
-                    Image(systemName: "goforward")
-                        .font(.system(size: 22))
-                        .foregroundColor(.white.opacity(0.9))
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+
+                Button {
+                    playNeighbor(forward: true)
+                } label: {
+                    Image(systemName: "forward.end.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
                 }
 
                 Button {
                     toggleFullscreen()
                 } label: {
                     Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 20))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-
-                aspectMenu
-
-                speedMenu
-
-                Button {
-                    controller.toggleSubtitles()
-                } label: {
-                    Image(systemName: controller.subtitlesEnabled ? "captions.bubble.fill" : "captions.bubble")
-                        .font(.system(size: 20))
-                        .foregroundColor(controller.subtitlesEnabled ? theme.accent : .white.opacity(0.55))
-                }
-                .disabled(current.subtitleURL == nil)
-
-                Button {
-                    toggleLive()
-                } label: {
-                    Image(systemName: liveOn ? "text.bubble.fill" : "text.bubble")
-                        .font(.system(size: 20))
-                        .foregroundColor(liveOn ? theme.accent : .white.opacity(0.9))
-                }
-
-                Button {
-                    activeSheet = .liveSettings
-                } label: {
-                    Image(systemName: "globe")
-                        .font(.system(size: 20))
-                        .foregroundColor(.white.opacity(0.9))
+                        .font(.system(size: 19, weight: .medium))
+                        .foregroundColor(.white)
                 }
             }
             .padding(.bottom, 18)
