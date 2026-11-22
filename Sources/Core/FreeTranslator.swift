@@ -104,6 +104,24 @@ actor TranslationHub {
         let key = "\(source)|\(target)|\(trimmed)"
         if let hit = cache[key] { return hit }
 
+        // 离线日译中优先：模型已下载、原文像日语时完全本机翻译，不联网、不要 Key。
+        if LangCode.base(target).hasPrefix("zh") {
+            let sourceIsJa = LangCode.base(source) == "ja"
+            let looksJa = sourceIsJa || (LangCode.base(source) == "auto" && MTTokenizer.looksJapanese(trimmed))
+            if looksJa, OfflineMT.shared.isReady {
+                do {
+                    let offline = try await OfflineMT.shared.translate(trimmed)
+                    cache[key] = offline
+                    lastEngine = "离线日译中"
+                    lastErrorText = ""
+                    saveCacheIfNeeded()
+                    return offline
+                } catch {
+                    // 离线没翻出来就继续走下面的在线通道
+                }
+            }
+        }
+
         let engine = UserDefaults.standard.string(forKey: "translateEngine") ?? "auto"
         let hasAzure = !(UserDefaults.standard.string(forKey: "azureKey") ?? "").isEmpty
         let hasAPI = !((UserDefaults.standard.string(forKey: "apiKey") ?? "").trimmingCharacters(in: .whitespaces)).isEmpty

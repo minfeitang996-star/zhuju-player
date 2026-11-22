@@ -14,3 +14,6 @@ Payload/
 # 系统垃圾
 .DS_Store
 Thumbs.db
+
+# 本地调研脚本与大体积临时模型资产，不进仓库
+tools/

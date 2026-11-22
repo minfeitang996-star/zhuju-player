@@ -127,7 +127,7 @@ final class SubtitleJob: ObservableObject {
 
             if translate {
                 let config = TranslatorConfig.load()
-                if config.isUsable {
+                if config.isUsable || OfflineMT.shared.isReady {
                     apply(status: "翻译成中文…", progress: 0.85)
                     do {
                         finalCues = try await SubtitleTranslator.translate(
@@ -143,7 +143,7 @@ final class SubtitleJob: ObservableObject {
                         apply(notice: "翻译没成功，已先生成原文对照字幕：\(error.localizedDescription)")
                     }
                 } else {
-                    apply(notice: "没配置翻译接口，已生成原文对照字幕。去设置里填接口就能出中文。")
+                    apply(notice: "没配置翻译接口，也没下载离线翻译模型，已生成原文对照字幕。去设置里填接口、或下载离线日译中模型就能出中文。")
                 }
             }
 

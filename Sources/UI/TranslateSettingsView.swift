@@ -4,6 +4,7 @@ import SwiftUI
 struct TranslateSettingsView: View {
 
     @ObservedObject private var models = ModelManager.shared
+    @ObservedObject private var mtModels = MTModelManager.shared
 
     @AppStorage("apiBase") private var apiBase: String = ""
     @AppStorage("apiKey") private var apiKey: String = ""
@@ -103,6 +104,43 @@ struct TranslateSettingsView: View {
             }
 
             Section {
+                ForEach(MTModelManager.assets) { asset in
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(asset.label) · \(asset.sizeText)")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(asset.file)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        if mtModels.isDownloaded(asset) {
+                            Text("已下载")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        } else if mtModels.activeDownload == asset.id {
+                            ProgressView(value: mtModels.progress[asset.id] ?? 0)
+                                .frame(width: 50)
+                        } else {
+                            Button("下载") { downloadMT(asset) }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(mtModels.activeDownload != nil)
+                        }
+                    }
+                }
+                if MTModelManager.shared.allDownloaded {
+                    Text("离线翻译模型已就绪：日语字幕在本机译成中文，不联网、不需要 Key。")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(red: 0.45, green: 0.85, blue: 0.55))
+                }
+            } header: {
+                Text("离线翻译模型（日语 → 简体中文）")
+            } footer: {
+                Text("首次启用需下载约 225 MB（编码器 + 解码器 + 词表），存在本机「文件 App → 我的 iPhone → 糖敏飞视频播放器 → Models/mt」。模型只覆盖日语到中文，其他语言仍走在线接口。")
+            }
+
+            Section {
                 SecureField("Azure 订阅密钥（Ocp-Apim-Subscription-Key）", text: $azureKey)
                 TextField("Azure 区域，例如 eastasia（留空用全球端点）", text: $azureRegion)
                     .textInputAutocapitalization(.never)
@@ -144,6 +182,12 @@ struct TranslateSettingsView: View {
     private func download(_ id: String) {
         Task {
             _ = try? await ModelManager.shared.download(id)
+        }
+    }
+
+    private func downloadMT(_ asset: MTModelManager.Asset) {
+        Task {
+            _ = try? await MTModelManager.shared.download(asset)
         }
     }
 

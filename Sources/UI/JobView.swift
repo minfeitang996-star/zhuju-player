@@ -72,10 +72,10 @@ struct JobView: View {
                 Section {
                     Toggle("翻译成\(translateTarget)", isOn: $translate)
                 } footer: {
-                    if TranslatorConfig.load().isUsable {
-                        Text("翻译走你配置的接口，字幕会变成中文。")
+                    if TranslatorConfig.load().isUsable || OfflineMT.shared.isReady {
+                        Text("翻译走你配置的接口；已下载离线模型时，日语字幕在本机译成中文。")
                     } else {
-                        Text("还没配置翻译接口：现在只会生成原文对照字幕，去设置里填完再回来。")
+                        Text("还没配置翻译接口，也没下载离线模型：现在只会生成原文对照字幕，去设置里填接口或下载离线日译中模型。")
                     }
                 }
 
