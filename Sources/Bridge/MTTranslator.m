@@ -2,18 +2,17 @@
 
 #include <onnxruntime/onnxruntime_c_api.h>
 
-#include <vector>
-#include <string>
-#include <limits>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
 
-namespace {
-constexpr int64_t kPadToken = 65000;
-constexpr int64_t kEosToken = 0;
-constexpr int kMaxOutputTokens = 64;
+static const int64_t kPadToken = 65000;
+static const int64_t kEosToken = 0;
+static const int kMaxOutputTokens = 64;
+#define kTargetCapacity 65
 
-const OrtApi* ortApi(void) {
+static const OrtApi* ortApi(void) {
     return OrtGetApiBase()->GetApi(ORT_API_VERSION);
-}
 }
 
 @interface MTTranslator () {
@@ -90,15 +89,23 @@ fail:
 
     const OrtApi* api = ortApi();
 
-    // 所有对象在方法顶部声明，避免 goto 跳过非平凡变量初始化。
-    std::vector<int64_t> sourceIds(ids, ids + count);
-    std::vector<int64_t> sourceMask(count, 1);
-    std::vector<int64_t> encShape = {1, static_cast<int64_t>(count)};
+    int64_t* sourceIds = (int64_t*)malloc((size_t)count * sizeof(int64_t));
+    int64_t* sourceMask = (int64_t*)malloc((size_t)count * sizeof(int64_t));
+    if (!sourceIds || !sourceMask) {
+        free(sourceIds); free(sourceMask);
+        if (error) { *error = [NSError errorWithDomain:@"MTTranslator" code:2
+            userInfo:@{ NSLocalizedDescriptionKey: @"内存不足" }]; }
+        return nil;
+    }
+    memcpy(sourceIds, ids, (size_t)count * sizeof(int64_t));
+    for (NSInteger i = 0; i < count; i++) { sourceMask[i] = 1; }
+
+    int64_t encShape[2] = {1, (int64_t)count};
 
     OrtValue* encInputs[2] = {NULL, NULL};
     OrtValue* encOutput = NULL;
     OrtTensorTypeAndShapeInfo* encInfo = NULL;
-    std::vector<float> hidden;
+    float* hidden = NULL;
     int64_t srcLen = 0;
     int64_t hiddenDim = 0;
 
@@ -106,18 +113,20 @@ fail:
     OrtValue* decOutput = NULL;
     OrtTensorTypeAndShapeInfo* decInfo = NULL;
 
-    std::vector<int64_t> targetIds = {kPadToken};
+    int64_t targetIds[kTargetCapacity];
+    int targetLen = 1;
+    targetIds[0] = kPadToken;
     NSMutableArray<NSNumber *> *resultArr = [NSMutableArray array];
     OrtStatus* status = NULL;
 
     // ---- 编码器 ----
     status = api->CreateTensorWithDataAsOrtValue(
-        _memoryInfo, sourceIds.data(), sourceIds.size() * sizeof(int64_t),
-        encShape.data(), encShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &encInputs[0]);
+        _memoryInfo, sourceIds, (size_t)count * sizeof(int64_t),
+        encShape, 2, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &encInputs[0]);
     if (status) goto done;
     status = api->CreateTensorWithDataAsOrtValue(
-        _memoryInfo, sourceMask.data(), sourceMask.size() * sizeof(int64_t),
-        encShape.data(), encShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &encInputs[1]);
+        _memoryInfo, sourceMask, (size_t)count * sizeof(int64_t),
+        encShape, 2, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &encInputs[1]);
     if (status) goto done;
 
     const char* encInputNames[2] = {"input_ids", "attention_mask"};
@@ -131,8 +140,9 @@ fail:
     size_t encDims = 0;
     status = api->GetDimensionsCount(encInfo, &encDims);
     if (status) goto done;
-    std::vector<int64_t> encShapeOut(encDims, 0);
-    status = api->GetDimensions(encInfo, encShapeOut.data(), encDims);
+    int64_t encShapeOut[3] = {0, 0, 0};
+    size_t readDims = encDims < 3 ? encDims : 3;
+    status = api->GetDimensions(encInfo, encShapeOut, readDims);
     if (status) goto done;
     srcLen = encShapeOut[1];
     hiddenDim = encShapeOut[2];
@@ -140,7 +150,15 @@ fail:
     float* hiddenData = NULL;
     status = api->GetTensorMutableData(encOutput, (void**)&hiddenData);
     if (status) goto done;
-    hidden.assign(hiddenData, hiddenData + srcLen * hiddenDim);
+    size_t hiddenCount = (size_t)(srcLen * hiddenDim);
+    hidden = (float*)malloc(hiddenCount * sizeof(float));
+    if (!hidden) {
+        free(sourceIds); free(sourceMask);
+        if (error) { *error = [NSError errorWithDomain:@"MTTranslator" code:2
+            userInfo:@{ NSLocalizedDescriptionKey: @"内存不足" }]; }
+        return nil;
+    }
+    memcpy(hidden, hiddenData, hiddenCount * sizeof(float));
 
     api->ReleaseTensorTypeAndShapeInfo(encInfo);
     encInfo = NULL;
@@ -156,20 +174,20 @@ fail:
     const char* decOutputNames[1] = {"logits"};
 
     for (int step = 0; step < kMaxOutputTokens; step++) {
-        std::vector<int64_t> decShape = {1, static_cast<int64_t>(targetIds.size())};
-        std::vector<int64_t> hiddenShape = {1, srcLen, hiddenDim};
+        int64_t decShape[2] = {1, (int64_t)targetLen};
+        int64_t hiddenShape[3] = {1, srcLen, hiddenDim};
 
         status = api->CreateTensorWithDataAsOrtValue(
-            _memoryInfo, targetIds.data(), targetIds.size() * sizeof(int64_t),
-            decShape.data(), decShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &decInputs[0]);
+            _memoryInfo, targetIds, (size_t)targetLen * sizeof(int64_t),
+            decShape, 2, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &decInputs[0]);
         if (status) goto done;
         status = api->CreateTensorWithDataAsOrtValue(
-            _memoryInfo, hidden.data(), hidden.size() * sizeof(float),
-            hiddenShape.data(), hiddenShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &decInputs[1]);
+            _memoryInfo, hidden, hiddenCount * sizeof(float),
+            hiddenShape, 3, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &decInputs[1]);
         if (status) goto done;
         status = api->CreateTensorWithDataAsOrtValue(
-            _memoryInfo, sourceMask.data(), sourceMask.size() * sizeof(int64_t),
-            encShape.data(), encShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &decInputs[2]);
+            _memoryInfo, sourceMask, (size_t)count * sizeof(int64_t),
+            encShape, 2, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &decInputs[2]);
         if (status) goto done;
 
         status = api->Run(_decoder, NULL, decInputNames, decInputs, 3,
@@ -181,8 +199,9 @@ fail:
         size_t decDims = 0;
         status = api->GetDimensionsCount(decInfo, &decDims);
         if (status) goto done;
-        std::vector<int64_t> decShapeOut(decDims, 0);
-        status = api->GetDimensions(decInfo, decShapeOut.data(), decDims);
+        int64_t decShapeOut[3] = {0, 0, 0};
+        size_t decRead = decDims < 3 ? decDims : 3;
+        status = api->GetDimensions(decInfo, decShapeOut, decRead);
         if (status) goto done;
         const int64_t tgtLen = decShapeOut[1];
         const int64_t vocabSize = decShapeOut[2];
@@ -193,7 +212,7 @@ fail:
         const float* row = logits + (tgtLen - 1) * vocabSize;
 
         int64_t best = 0;
-        float bestScore = -std::numeric_limits<float>::infinity();
+        float bestScore = -1e30f;
         for (int64_t k = 0; k < vocabSize; k++) {
             if (row[k] > bestScore) {
                 bestScore = row[k];
@@ -216,10 +235,17 @@ fail:
         if (best != kPadToken) {
             [resultArr addObject:@(best)];
         }
-        targetIds.push_back(best);
+        if (targetLen < kTargetCapacity) {
+            targetIds[targetLen++] = best;
+        } else {
+            break;
+        }
     }
 
 done:
+    free(sourceIds);
+    free(sourceMask);
+    free(hidden);
     if (encOutput) { api->ReleaseValue(encOutput); }
     if (encInputs[0]) { api->ReleaseValue(encInputs[0]); }
     if (encInputs[1]) { api->ReleaseValue(encInputs[1]); }
@@ -227,6 +253,7 @@ done:
     if (decInputs[0]) { api->ReleaseValue(decInputs[0]); }
     if (decInputs[1]) { api->ReleaseValue(decInputs[1]); }
     if (decInputs[2]) { api->ReleaseValue(decInputs[2]); }
+    if (encInfo) { api->ReleaseTensorTypeAndShapeInfo(encInfo); }
     if (decInfo) { api->ReleaseTensorTypeAndShapeInfo(decInfo); }
 
     if (status) {
