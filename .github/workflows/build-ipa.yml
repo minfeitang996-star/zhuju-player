@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ThirdParty/onnxruntime.xcframework
-          key: onnxruntime-xcframework-v1
+          key: onnxruntime-xcframework-v2
 
       - name: Fetch onnxruntime.xcframework
         if: steps.ortcache.outputs.cache-hit != 'true'
@@ -69,10 +69,10 @@ jobs:
 
       - name: Patch ORT headers (strip exception specifiers)
         run: |
-          find ThirdParty/onnxruntime.xcframework -name 'onnxruntime_c_api.h' -print0 | while IFS= read -r -d '' h; do
-            sed -i '' 's/ NO_EXCEPTION//g' "$h"
+          find ThirdParty/onnxruntime.xcframework -name '*.h' -print0 | while IFS= read -r -d '' h; do
+            sed -i '' 's/NO_EXCEPTION//g' "$h"
           done
-          grep -c NO_EXCEPTION ThirdParty/onnxruntime.xcframework/ios-arm64/Headers/onnxruntime/onnxruntime_c_api.h || true
+          grep -rc NO_EXCEPTION ThirdParty/onnxruntime.xcframework/ios-arm64/Headers || true
 
       - name: Generate Xcode project
         run: |
