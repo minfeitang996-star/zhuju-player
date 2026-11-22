@@ -104,9 +104,24 @@ actor TranslationHub {
         let key = "\(source)|\(target)|\(trimmed)"
         if let hit = cache[key] { return hit }
 
+        let engine = UserDefaults.standard.string(forKey: "translateEngine") ?? "auto"
         let hasAzure = !(UserDefaults.standard.string(forKey: "azureKey") ?? "").isEmpty
-        var order = ["mymemory", "google"]
-        if hasAzure { order.insert("azure", at: 0) }
+        let hasAPI = !((UserDefaults.standard.string(forKey: "apiKey") ?? "").trimmingCharacters(in: .whitespaces)).isEmpty
+            && !((UserDefaults.standard.string(forKey: "apiBase") ?? "").trimmingCharacters(in: .whitespaces)).isEmpty
+        var order: [String]
+        switch engine {
+        case "api": order = hasAPI ? ["api"] : []
+        case "azure": order = hasAzure ? ["azure"] : []
+        case "free": order = ["mymemory", "google"]
+        default:
+            order = []
+            if hasAPI { order.append("api") }
+            if hasAzure { order.append("azure") }
+            order += ["mymemory", "google"]
+        }
+        if order.isEmpty {
+            throw FreeTranslationError.failed("所选通道还没配置：填自配接口的 Base URL/Key，或 Azure 密钥")
+        }
 
         var errors: [String] = []
         let deadline = Date().addingTimeInterval(12)
@@ -118,6 +133,7 @@ actor TranslationHub {
                 let result: String
                 switch name {
                 case "azure": result = try await azure(trimmed, from: source, to: target)
+                case "api": result = try await api(trimmed, from: source, to: target)
                 case "mymemory": result = try await myMemory(trimmed, from: source, to: target)
                 default: result = try await google(trimmed, from: source, to: target)
                 }
@@ -151,6 +167,7 @@ actor TranslationHub {
     private func displayName(_ name: String) -> String {
         switch name {
         case "azure": return "Azure"
+        case "api": return "自配接口"
         case "mymemory": return "MyMemory"
         case "youdao": return "有道"
         default: return "Google"
@@ -199,6 +216,64 @@ actor TranslationHub {
             let out = trans.first?["text"] as? String
         else { throw FreeTranslationError.failed("Azure 返回无法解析") }
         return out
+    }
+
+    /// 自配 OpenAI 兼容接口（DeepSeek / 月之暗面 / 通义 / 硅基流动 / OpenAI 等）
+    private func api(_ text: String, from source: String, to target: String) async throws -> String {
+        let base = (UserDefaults.standard.string(forKey: "apiBase") ?? "").trimmingCharacters(in: .whitespaces)
+        let key = (UserDefaults.standard.string(forKey: "apiKey") ?? "").trimmingCharacters(in: .whitespaces)
+        let model = (UserDefaults.standard.string(forKey: "apiModel") ?? "deepseek-chat").trimmingCharacters(in: .whitespaces)
+        guard !base.isEmpty else { throw FreeTranslationError.failed("自配接口没填 Base URL") }
+
+        var urlString = base
+        if !urlString.hasSuffix("/chat/completions") {
+            if urlString.hasSuffix("/") { urlString.removeLast() }
+            urlString += "/chat/completions"
+        }
+        guard let url = URL(string: urlString) else { throw FreeTranslationError.failed("自配接口链接拼装失败") }
+
+        let targetName = LangCode.name(target)
+        let sourceName = source == "auto" ? "源语言" : LangCode.name(source)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !key.isEmpty { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+
+        let system = "你是专业影视字幕翻译。把下面的\(sourceName)句子翻译成\(targetName)，只输出译文本身，不要解释、不要加引号、不要保留原文。"
+        let body: [String: Any] = [
+            "model": model.isEmpty ? "deepseek-chat" : model,
+            "temperature": 0.2,
+            "messages": [
+                ["role": "system", "content": system],
+                ["role": "user", "content": text]
+            ]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw FreeTranslationError.failed("自配接口无响应") }
+        if http.statusCode == 401 || http.statusCode == 403 {
+            throw FreeTranslationError.failed("自配接口 Key 无效或没有权限")
+        }
+        if http.statusCode == 429 {
+            throw FreeTranslationError.failed("自配接口频率超限 429")
+        }
+        guard http.statusCode == 200 else {
+            let snippet = String(data: data, encoding: .utf8)?.prefix(120) ?? ""
+            throw FreeTranslationError.failed("自配接口 HTTP \(http.statusCode) \(snippet)")
+        }
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let choices = json["choices"] as? [[String: Any]],
+            let message = choices.first?["message"] as? [String: Any],
+            let content = message["content"] as? String
+        else { throw FreeTranslationError.failed("自配接口返回无法解析") }
+
+        var clean = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        clean = clean.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”'『』「」"))
+        guard !clean.isEmpty else { throw FreeTranslationError.failed("自配接口没返回译文") }
+        return clean
     }
 
     private func azureTarget(_ raw: String) -> String {
