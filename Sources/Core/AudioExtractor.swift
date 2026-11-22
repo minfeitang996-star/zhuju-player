@@ -19,6 +19,18 @@ enum AudioError: LocalizedError {
     }
 }
 
+/// 音轨抽取统计：总时长 / 真正送进识别的时长 / 被静音门限跳过的时长
+struct AudioStreamStats {
+    var totalSeconds: Double = 0
+    var sentSeconds: Double = 0
+    var skippedSeconds: Double = 0
+
+    var skippedRatio: Double {
+        guard totalSeconds > 0 else { return 0 }
+        return min(1.0, skippedSeconds / totalSeconds)
+    }
+}
+
 /// 把视频音轨解码成 16k 单声道 Float PCM，按窗口回调给识别引擎。
 enum AudioExtractor {
 
@@ -31,11 +43,12 @@ enum AudioExtractor {
     }
 
     /// 直接用 AVFoundation 读取（mp4/mov/m4v/3gp/mp3 等），速度快。
+    @discardableResult
     static func stream(from url: URL,
-                       window: Double = 50,
+                       window: Double = 30,
                        skipSilence: Bool = true,
                        onWindow: ([Float], TimeInterval) -> Void,
-                       onProgress: (Double) -> Void) throws {
+                       onProgress: (Double) -> Void) throws -> AudioStreamStats {
 
         let asset = AVURLAsset(url: url)
         guard let track = asset.tracks(withMediaType: .audio).first else {
@@ -63,6 +76,7 @@ enum AudioExtractor {
         let windowSamples = Int(window * sampleRate)
         var buffer: [Float] = []
         var windowStart: TimeInterval = 0
+        var stats = AudioStreamStats(totalSeconds: max(0, totalSeconds))
 
         while reader.status == .reading {
             guard let sampleBuffer = output.copyNextSampleBuffer() else { break }
@@ -74,6 +88,9 @@ enum AudioExtractor {
                 buffer.removeFirst(windowSamples)
                 if !(skipSilence && isSilent(slice)) {
                     onWindow(slice, windowStart)
+                    stats.sentSeconds += window
+                } else {
+                    stats.skippedSeconds += window
                 }
                 windowStart += Double(windowSamples) / sampleRate
                 if totalSeconds > 0 {
@@ -83,10 +100,14 @@ enum AudioExtractor {
         }
 
         if !buffer.isEmpty {
+            let tailSeconds = Double(buffer.count) / sampleRate
             if !(skipSilence && isSilent(buffer)) {
                 onWindow(buffer, windowStart)
+                stats.sentSeconds += tailSeconds
+            } else {
+                stats.skippedSeconds += tailSeconds
             }
-            windowStart += Double(buffer.count) / sampleRate
+            windowStart += tailSeconds
         }
 
         if reader.status == .failed {
@@ -95,15 +116,24 @@ enum AudioExtractor {
         if totalSeconds > 0 {
             onProgress(1.0)
         }
+        return stats
     }
 
-    /// 静音/纯底噪：低于 -54 dBFS 就不送识别了，能省掉大段无对白的计算
+    /// 静音/纯底噪：低于 -54 dBFS 就不送识别了，能省掉大段无对白的计算。
+    /// 门限别调高：不少片子整体音量小，门限一高会把整段对白当静音丢掉（曾经就是这样整片识别为空）。
     static func isSilent(_ samples: [Float]) -> Bool {
         guard !samples.isEmpty else { return true }
         var energy: Float = 0
         for value in samples { energy += value * value }
         let rms = (energy / Float(samples.count)).squareRoot()
         return rms < 0.002
+    }
+
+    /// 峰值是否低到不像有声音（中文/日语片偶尔整体音量极低）
+    static func peak(_ samples: [Float]) -> Float {
+        var maxValue: Float = 0
+        for value in samples { maxValue = max(maxValue, abs(value)) }
+        return maxValue
     }
 
     static func floats(from sampleBuffer: CMSampleBuffer) -> [Float]? {

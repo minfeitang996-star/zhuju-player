@@ -8,6 +8,9 @@ final class WhisperEngine {
     var fastMode: Bool = true
     /// 上一次识别时 whisper 判定的语种（zh / en / ja …）
     private(set) var lastLanguage: String?
+    /// 上一次 whisper_full 的返回码（0 成功）与出段数，用于把「识别不出内容」的原因说清楚
+    private(set) var lastRunCode: Int32 = -1
+    private(set) var lastSegmentCount = 0
 
     private static var cachePath: String?
     private static var cacheEngine: WhisperEngine?
@@ -64,15 +67,18 @@ final class WhisperEngine {
         params.no_context = true
         params.suppress_blank = true
         params.temperature = 0.0
-        params.temperature_inc = 0.0
+        // 温度回退必须保留（默认 0.2）：遇到音乐/口音重/音量低的段落时，whisper 会升温度重试，
+        // 设成 0 等于「一次不行就放弃」，表现出来就是整段识别为空
+        params.temperature_inc = 0.2
         params.detect_language = false
         params.language = nil
         params.n_threads = Int32(max(2, min(6, ProcessInfo.processInfo.processorCount)))
+        // 注意：不能砍 audio_ctx（曾经设成 768，等于只编码半个窗口，日语直接丢段甚至整段空白）。
+        // 提速只靠线程数 + greedy，不用牺牲上下文。
         if fastMode {
-            // 极速模式：编码器上下文砍半 + 用满性能核，实测比默认快 20~35%
-            params.audio_ctx = 768
             params.n_threads = Int32(max(4, min(6, ProcessInfo.processInfo.processorCount)))
         }
+        params.audio_ctx = 0
 
         let run: (UnsafePointer<CChar>?) -> Int32 = { ptr in
             params.language = ptr
@@ -82,13 +88,27 @@ final class WhisperEngine {
             }
         }
 
-        let code: Int32
+        // 「自动检测」必须真的打开检测：detect_language=false 且 language=nil 时，
+        // whisper 会退回按英语识别，日语片就会大量空段甚至整段识别失败。
+        // 首窗检测成功后记住语种，后续窗口直接复用，省掉每窗的检测开销（更快）。
+        let effectiveLanguage: String?
         if let language, !language.isEmpty {
-            code = language.withCString { run($0) }
+            effectiveLanguage = language
+        } else if let cached = lastLanguage, !cached.isEmpty, lastSegmentCount > 0 {
+            effectiveLanguage = cached
+        } else {
+            effectiveLanguage = nil
+        }
+        params.detect_language = (effectiveLanguage == nil)
+
+        let code: Int32
+        if let effectiveLanguage {
+            code = effectiveLanguage.withCString { run($0) }
         } else {
             code = run(nil)
         }
 
+        lastRunCode = code
         guard code == 0 else { return }
 
         let languageID = whisper_full_lang_id(ctx)
@@ -97,6 +117,7 @@ final class WhisperEngine {
         }
 
         let count = whisper_full_n_segments(ctx)
+        lastSegmentCount = count
         guard count > 0 else { return }
 
         for index in 0..<count {

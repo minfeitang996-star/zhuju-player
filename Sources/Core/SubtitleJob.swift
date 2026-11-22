@@ -89,15 +89,36 @@ final class SubtitleJob: ObservableObject {
             }
 
             apply(status: "识别语音…", progress: 0.15)
-            let cues = try await transcribe(videoURL: workingURL,
-                                            engine: engine,
-                                            language: language,
-                                            base: 0.15,
-                                            span: 0.7)
+            var cues: [SubtitleCue] = []
+            var stats = AudioStreamStats()
+            (cues, stats) = try await transcribe(videoURL: workingURL,
+                                                 engine: engine,
+                                                 language: language,
+                                                 base: 0.15,
+                                                 span: 0.7,
+                                                 window: 30,
+                                                 skipSilence: true)
+
+            // 第一遍为空，或者绝大部分音轨被静音门限吃掉 → 不跳静音、标准参数整条重跑一次
+            if cues.isEmpty || stats.skippedRatio > 0.85 {
+                let reason = cues.isEmpty
+                    ? "第一遍没出字幕"
+                    : "静音过滤跳过了 \(Int(stats.skippedRatio * 100))% 的音轨"
+                apply(status: "\(reason)，改用完整音轨重试…", progress: 0.4)
+                let fullEngine = (try? WhisperEngine.shared(modelPath: modelURL.path, fastMode: false)) ?? engine
+                (cues, stats) = try await transcribe(videoURL: workingURL,
+                                                     engine: fullEngine,
+                                                     language: language,
+                                                     base: 0.4,
+                                                     span: 0.42,
+                                                     window: 30,
+                                                     skipSilence: false)
+            }
 
             guard !cues.isEmpty else {
+                let seconds = Int(max(stats.totalSeconds, stats.sentSeconds))
                 apply(status: "没识别出内容",
-                      errorText: "这段视频里没有可识别的语音，或者模型太小没撑住，换个更大的模型再试")
+                      errorText: "音轨 \(seconds) 秒已整条送识别，whisper 返回码 \(engine.lastRunCode)、出段数 \(engine.lastSegmentCount)。要么这段确实没人声，要么模型撑不住（建议换 small 再试），要么音轨本身是坏的。")
                 return
             }
 
@@ -109,9 +130,15 @@ final class SubtitleJob: ObservableObject {
                 if config.isUsable {
                     apply(status: "翻译成中文…", progress: 0.85)
                     do {
-                        finalCues = try await SubtitleTranslator.translate(cues, config: config) { value in
-                            self.apply(progress: 0.85 + 0.14 * value)
-                        }
+                        finalCues = try await SubtitleTranslator.translate(
+                            cues,
+                            config: config,
+                            onProgress: { value in
+                                self.apply(progress: 0.85 + 0.14 * value)
+                            },
+                            onNotice: { message in
+                                self.apply(notice: message)
+                            })
                     } catch {
                         apply(notice: "翻译没成功，已先生成原文对照字幕：\(error.localizedDescription)")
                     }
@@ -151,14 +178,16 @@ final class SubtitleJob: ObservableObject {
                             engine: WhisperEngine,
                             language: String?,
                             base: Double,
-                            span: Double) async throws -> [SubtitleCue] {
+                            span: Double,
+                            window: Double,
+                            skipSilence: Bool) async throws -> ([SubtitleCue], AudioStreamStats) {
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[SubtitleCue], Error>) in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<([SubtitleCue], AudioStreamStats), Error>) in
             DispatchQueue.global(qos: .userInitiated).async {
                 var cues: [SubtitleCue] = []
                 let lock = NSLock()
                 do {
-                    try AudioExtractor.stream(from: videoURL, window: 50, skipSilence: true, onWindow: { samples, offset in
+                    let stats = try AudioExtractor.stream(from: videoURL, window: window, skipSilence: skipSilence, onWindow: { samples, offset in
                         engine.transcribe(samples: samples, offset: offset, language: language) { cue in
                             lock.lock()
                             cues.append(cue)
@@ -168,9 +197,9 @@ final class SubtitleJob: ObservableObject {
                         self.apply(progress: base + span * value)
                     })
                     lock.lock()
-                    let snapshot = cues
+                    let snapshot = cues.sorted { $0.start < $1.start }
                     lock.unlock()
-                    continuation.resume(returning: snapshot)
+                    continuation.resume(returning: (snapshot, stats))
                 } catch {
                     continuation.resume(throwing: error)
                 }

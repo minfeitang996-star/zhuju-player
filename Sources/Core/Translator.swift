@@ -57,7 +57,8 @@ enum SubtitleTranslator {
 
     static func translate(_ cues: [SubtitleCue],
                           config: TranslatorConfig,
-                          onProgress: @escaping (Double) -> Void) async throws -> [SubtitleCue] {
+                          onProgress: @escaping (Double) -> Void,
+                          onNotice: ((String) -> Void)? = nil) async throws -> [SubtitleCue] {
 
         // 没配自配接口、或用户选了免费通道 → 走内置免密钥翻译，不报「未配置」
         if !config.useAPI {
@@ -66,21 +67,71 @@ enum SubtitleTranslator {
 
         var output = cues
         let total = max(1, cues.count)
+        let starts = stride(from: 0, to: cues.count, by: batchSize).map { $0 }
+        guard !starts.isEmpty else { return output }
+
         var done = 0
+        var failedBatches = 0
+        var lastMessage = ""
+        let maxParallel = 2
 
-        while done < cues.count {
-            let end = min(done + batchSize, cues.count)
-            let batch = Array(cues[done..<end])
-            let translated = try await request(batch, config: config)
+        try await withThrowingTaskGroup(of: (Int, Int, [String]?, String?).self) { group in
+            var nextIndex = 0
+            var active = 0
 
-            for (offset, text) in translated.enumerated() where done + offset < output.count {
-                if !text.isEmpty {
-                    output[done + offset].text = text
+            while nextIndex < starts.count && active < maxParallel {
+                let start = starts[nextIndex]
+                let end = min(start + batchSize, cues.count)
+                let slice = Array(cues[start..<end])
+                group.addTask {
+                    do {
+                        let lines = try await request(slice, config: config)
+                        return (start, end, lines, nil)
+                    } catch {
+                        return (start, end, nil, error.localizedDescription)
+                    }
                 }
+                nextIndex += 1
+                active += 1
             }
 
-            done = end
-            onProgress(Double(done) / Double(total))
+            while let (start, end, lines, message) = try await group.next() {
+                active -= 1
+
+                if let lines {
+                    for (offset, text) in lines.enumerated() where start + offset < output.count {
+                        if !text.isEmpty { output[start + offset].text = text }
+                    }
+                } else {
+                    failedBatches += 1
+                    lastMessage = message ?? "翻译接口没有返回结果"
+                }
+
+                done += (end - start)
+                onProgress(Double(min(done, total)) / Double(total))
+
+                if nextIndex < starts.count {
+                    let nextStart = starts[nextIndex]
+                    let nextEnd = min(nextStart + batchSize, cues.count)
+                    let slice = Array(cues[nextStart..<nextEnd])
+                    group.addTask {
+                        do {
+                            let lines = try await request(slice, config: config)
+                            return (nextStart, nextEnd, lines, nil)
+                        } catch {
+                            return (nextStart, nextEnd, nil, error.localizedDescription)
+                        }
+                    }
+                    nextIndex += 1
+                    active += 1
+                }
+            }
+        }
+
+        if failedBatches == starts.count {
+            throw TranslatorError.http(-1, lastMessage.isEmpty ? "全部批次都失败" : lastMessage)
+        } else if failedBatches > 0 {
+            onNotice?("有 \(failedBatches) 段没翻成，已保留原文：\(lastMessage)")
         }
 
         return output
