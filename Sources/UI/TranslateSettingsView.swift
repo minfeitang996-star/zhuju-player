@@ -7,6 +7,8 @@ struct TranslateSettingsView: View {
 
     @AppStorage("apiBase") private var apiBase: String = ""
     @AppStorage("apiKey") private var apiKey: String = ""
+    @AppStorage("azureKey") private var azureKey: String = ""
+    @AppStorage("azureRegion") private var azureRegion: String = "eastasia"
     @AppStorage("apiModel") private var apiModel: String = "deepseek-chat"
     @AppStorage("translateEnabled") private var translateEnabled: Bool = true
     @AppStorage("liveStatusVisible") private var liveStatusVisible: Bool = true
@@ -35,10 +37,12 @@ struct TranslateSettingsView: View {
                     }
                 }
                 Picker("翻译通道", selection: $engine) {
-                    Text("自动（免费优先）").tag("auto")
-                    Text("内置免密钥通道").tag("free")
-                    Text("自配接口（DeepSeek）").tag("api")
+                    Text("自动（有 Key 优先）").tag("auto")
+                    Text("Azure 翻译（免费额度）").tag("azure")
+                    Text("自配接口（OpenAI 兼容）").tag("api")
+                    Text("内置免密钥（多数已失效）").tag("free")
                 }
+                .pickerStyle(.navigationLink)
                 Button {
                     runTest()
                 } label: {
@@ -57,7 +61,7 @@ struct TranslateSettingsView: View {
             } header: {
                 Text("翻译")
             } footer: {
-                Text("两个开关各自独立：关「显示同传状态条」只隐藏「日语 → 简体中文 · 边看边译中 · 已识别 9 段」那一行；关「显示翻译字幕」只隐藏画面底部滚动的原文/译文。关掉只是不显示，识别和翻译仍在后台跑，再打开就恢复。内置通道不用填 API Key，必应 / MyMemory / 有道 / Google 四通道自动切换，失败自动换下一个，译文存本地缓存。只有填了下面的接口、并把通道选「自配接口」，才会走你自己的接口。")
+                Text("两个开关各自独立：关「显示同传状态条」只隐藏「日语 → 简体中文 · 边看边译中 · 已识别 9 段」那一行；关「显示翻译字幕」只隐藏画面底部滚动的原文/译文。关掉只是不显示，识别和翻译仍在后台跑，再打开就恢复。免密钥通道这两年被陆续封停（MyMemory 每天额度很小、Google 需要代理），所以想长期稳定翻译，最好填 Azure（免费 200 万字符/月）或自配接口的 Key。译文都会存本地缓存，重复台词不再联网。")
             }
 
             Section {
@@ -99,6 +103,17 @@ struct TranslateSettingsView: View {
             }
 
             Section {
+                SecureField("Azure 订阅密钥（Ocp-Apim-Subscription-Key）", text: $azureKey)
+                TextField("Azure 区域，例如 eastasia（留空用全球端点）", text: $azureRegion)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } header: {
+                Text("Azure 翻译（推荐，长期可用）")
+            } footer: {
+                Text("portal.azure.com 免费注册「翻译」资源（F0 层每月 200 万字符），把密钥和区域填这里，通道选「Azure 翻译」或「自动」即可。国内可直连，不需要代理。")
+            }
+
+            Section {
                 TextField("Base URL，例如 https://api.deepseek.com/v1", text: $apiBase)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -110,7 +125,7 @@ struct TranslateSettingsView: View {
             } header: {
                 Text("翻译接口（OpenAI 兼容）")
             } footer: {
-                Text("DeepSeek、月之暗面、通义、OpenAI 这类 /chat/completions 接口都能填。留空不影响使用，会走上面的内置免费通道。")
+                Text("DeepSeek、月之暗面、通义、硅基流动、OpenAI 这类 /chat/completions 接口都能填，填完把通道选「自配接口」。")
             }
 
             Section {

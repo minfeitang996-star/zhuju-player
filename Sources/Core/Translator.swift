@@ -92,16 +92,22 @@ enum SubtitleTranslator {
                                       onProgress: @escaping (Double) -> Void) async -> [SubtitleCue] {
         var output = cues
         let total = max(1, cues.count)
+        var consecutiveFailures = 0
 
         for index in cues.indices {
             if Task.isCancelled { break }
+            // 在线通道已经连续挂了就直接停，别让整批卡在超时里
+            if consecutiveFailures >= 3 { break }
             let text = cues[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {
                 do {
                     let translated = try await TranslationHub.shared.translate(text, source: "auto", target: LangCode.code(for: target))
-                    if !translated.isEmpty { output[index].text = translated }
+                    if !translated.isEmpty {
+                        output[index].text = translated
+                        consecutiveFailures = 0
+                    }
                 } catch {
-                    // 单条失败就保留原文，下一轮继续翻
+                    consecutiveFailures += 1
                 }
             }
             onProgress(Double(index + 1) / Double(total))

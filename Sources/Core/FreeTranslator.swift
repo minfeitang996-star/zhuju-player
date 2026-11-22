@@ -76,8 +76,6 @@ actor TranslationHub {
     private var cacheLoaded = false
     private var lastRequestAt = Date.distantPast
     private var cooldown: [String: Date] = [:]
-    private var bingToken: String?
-    private var bingTokenAt = Date.distantPast
     private(set) var lastEngine = ""
     private(set) var lastErrorText = ""
 
@@ -89,25 +87,38 @@ actor TranslationHub {
     func currentEngine() -> String { lastEngine }
     func currentError() -> String { lastErrorText }
 
+    /// 在线免密钥通道这两年陆续失效，连续失败后整体熔断，避免拖住识别/生成字幕
+    private var failStreak = 0
+    private var disabledUntil = Date.distantPast
+
     func translate(_ text: String, source: String, target: String) async throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
         if LangCode.isSame(source, target) { return trimmed }
 
+        if Date() < disabledUntil {
+            throw FreeTranslationError.failed("在线翻译暂时不可用，已切到原文显示。要长期稳定请在设置里填 Azure 或自配接口的 Key")
+        }
+
         loadCacheIfNeeded()
         let key = "\(source)|\(target)|\(trimmed)"
         if let hit = cache[key] { return hit }
 
-        var errors: [String] = []
+        let hasAzure = !(UserDefaults.standard.string(forKey: "azureKey") ?? "").isEmpty
+        var order = ["mymemory", "google"]
+        if hasAzure { order.insert("azure", at: 0) }
 
-        for name in ["bing", "mymemory", "youdao", "google"] {
+        var errors: [String] = []
+        let deadline = Date().addingTimeInterval(12)
+
+        for name in order {
+            if Date() >= deadline { errors.append("\(displayName(name)): 超出本次预算跳过"); continue }
             if let until = cooldown[name], Date() < until { continue }
             do {
                 let result: String
                 switch name {
-                case "bing": result = try await bing(trimmed, from: source, to: target)
+                case "azure": result = try await azure(trimmed, from: source, to: target)
                 case "mymemory": result = try await myMemory(trimmed, from: source, to: target)
-                case "youdao": result = try await youdaoWeb(trimmed, from: source, to: target)
                 default: result = try await google(trimmed, from: source, to: target)
                 }
                 let clean = result.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -115,17 +126,23 @@ actor TranslationHub {
                 cache[key] = clean
                 lastEngine = displayName(name)
                 lastErrorText = ""
+                failStreak = 0
                 saveCacheIfNeeded()
                 return clean
             } catch {
                 errors.append("\(displayName(name)): \(error.localizedDescription)")
                 let msg = error.localizedDescription
                 let long = msg.contains("429") || msg.contains("403") || msg.contains("额度") || msg.contains("quota")
-                cooldown[name] = Date().addingTimeInterval(long ? 600 : 90)
+                cooldown[name] = Date().addingTimeInterval(long ? 900 : 120)
             }
         }
 
         lastErrorText = errors.joined(separator: " / ")
+        failStreak += 1
+        if failStreak >= 5 {
+            disabledUntil = Date().addingTimeInterval(600)
+            failStreak = 0
+        }
         throw FreeTranslationError.failed(lastErrorText.isEmpty ? "翻译通道暂时不可用" : lastErrorText)
     }
 
@@ -133,69 +150,59 @@ actor TranslationHub {
 
     private func displayName(_ name: String) -> String {
         switch name {
-        case "bing": return "必应"
+        case "azure": return "Azure"
         case "mymemory": return "MyMemory"
         case "youdao": return "有道"
         default: return "Google"
         }
     }
 
-    /// 必应：先从 edge 拿免鉴权 token，再走 translate v3
-    private func bing(_ text: String, from source: String, to target: String) async throws -> String {
-        await waitGap(1.2)
-        let token = try await bingAuth()
-        let toCode = bingTarget(target)
-        var components = URLComponents(string: "https://api-edge.cognitive.microsofttranslator.com/translate")
+    /// Azure 翻译：官方免费层每月 200 万字符，国内可直连，key 在设置里填
+    private func azure(_ text: String, from source: String, to target: String) async throws -> String {
+        let key = (UserDefaults.standard.string(forKey: "azureKey") ?? "").trimmingCharacters(in: .whitespaces)
+        let region = (UserDefaults.standard.string(forKey: "azureRegion") ?? "").trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty else { throw FreeTranslationError.failed("没填 Azure Key") }
+
+        await waitGap(0.4)
+        var components = URLComponents(string: "https://api.cognitive.microsofttranslator.com/translate")
         var items = [URLQueryItem(name: "api-version", value: "3.0"),
-                     URLQueryItem(name: "to", value: toCode)]
+                     URLQueryItem(name: "to", value: azureTarget(target))]
         if source != "auto" { items.append(URLQueryItem(name: "from", value: LangCode.base(source))) }
         components?.queryItems = items
-        guard let url = components?.url else { throw FreeTranslationError.failed("必应链接拼装失败") }
+        guard let url = components?.url else { throw FreeTranslationError.failed("Azure 链接拼装失败") }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 20
+        request.timeoutInterval = 8
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-ClientTraceId")
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.setValue(key, forHTTPHeaderField: "Ocp-Apim-Subscription-Key")
+        if !region.isEmpty {
+            request.setValue(region, forHTTPHeaderField: "Ocp-Apim-Subscription-Region")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: [["Text": text]])
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw FreeTranslationError.failed("必应无响应") }
-        if http.statusCode != 200 {
-            if http.statusCode == 401 { bingToken = nil; bingTokenAt = .distantPast }
-            throw FreeTranslationError.failed("必应 HTTP \(http.statusCode)")
+        guard let http = response as? HTTPURLResponse else { throw FreeTranslationError.failed("Azure 无响应") }
+        if http.statusCode == 401 || http.statusCode == 403 {
+            throw FreeTranslationError.failed("Azure Key 无效或 Region 不对")
+        }
+        if http.statusCode == 429 {
+            throw FreeTranslationError.failed("Azure 频率超限 429")
+        }
+        guard http.statusCode == 200 else {
+            throw FreeTranslationError.failed("Azure HTTP \(http.statusCode)")
         }
         guard
             let list = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
             let first = list.first,
             let trans = first["translations"] as? [[String: Any]],
             let out = trans.first?["text"] as? String
-        else { throw FreeTranslationError.failed("必应返回无法解析") }
+        else { throw FreeTranslationError.failed("Azure 返回无法解析") }
         return out
     }
 
-    private func bingAuth() async throws -> String {
-        if let token = bingToken, Date().timeIntervalSince(bingTokenAt) < 480 { return token }
-        var request = URLRequest(url: URL(string: "https://edge.microsoft.com/translate/auth")!)
-        request.timeoutInterval = 15
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw FreeTranslationError.failed("必应取 token 失败")
-        }
-        let token = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard token.count > 40 else { throw FreeTranslationError.failed("必应 token 为空") }
-        bingToken = token
-        bingTokenAt = Date()
-        return token
-    }
-
-    private func bingTarget(_ raw: String) -> String {
-        if raw.hasPrefix("zh") {
-            return raw == "zh-CHT" || raw == "繁体中文" ? "zh-Hant" : "zh-Hans"
-        }
+    private func azureTarget(_ raw: String) -> String {
+        if raw.hasPrefix("zh") { return raw == "zh-CHT" ? "zh-Hant" : "zh-Hans" }
         return LangCode.base(raw)
     }
 
@@ -209,7 +216,7 @@ actor TranslationHub {
         guard let url = components?.url else { throw FreeTranslationError.failed("MyMemory 链接拼装失败") }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 20
+        request.timeoutInterval = 8
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -242,7 +249,7 @@ actor TranslationHub {
         guard let url = components?.url else { throw FreeTranslationError.failed("有道链接拼装失败") }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 20
+        request.timeoutInterval = 8
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         request.setValue("https://fanyi.youdao.com/", forHTTPHeaderField: "Referer")
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -281,7 +288,7 @@ actor TranslationHub {
         ]
         guard let url = components?.url else { throw FreeTranslationError.failed("Google 链接拼装失败") }
         var request = URLRequest(url: url)
-        request.timeoutInterval = 20
+        request.timeoutInterval = 8
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
@@ -312,7 +319,7 @@ actor TranslationHub {
     }
 
     private func saveCacheIfNeeded() {
-        guard cache.count % 25 == 0 else { return }
+        guard !cache.isEmpty else { return }
         if cache.count > 3000 {
             cache = Dictionary(uniqueKeysWithValues: Array(cache).suffix(2000))
         }
