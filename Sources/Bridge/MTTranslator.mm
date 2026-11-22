@@ -41,8 +41,8 @@ const OrtApi* ortApi(void) {
 
     status = api->CreateSessionOptions(&_sessionOptions);
     if (status) { goto fail; }
-    api->SetIntraOpNumThreads(_sessionOptions, 2);
-    api->SetSessionGraphOptimizationLevel(_sessionOptions, ORT_ENABLE_BASIC);
+    if (api->SetIntraOpNumThreads(_sessionOptions, 2)) { goto fail; }
+    if (api->SetSessionGraphOptimizationLevel(_sessionOptions, ORT_ENABLE_BASIC)) { goto fail; }
 
     status = api->CreateSession(_env, [encoderPath UTF8String], _sessionOptions, &_encoder);
     if (status) { goto fail; }
@@ -69,6 +69,7 @@ fail:
     if (_encoder) { api->ReleaseSession(_encoder); _encoder = NULL; }
     if (_decoder) { api->ReleaseSession(_decoder); _decoder = NULL; }
     if (_sessionOptions) { api->ReleaseSessionOptions(_sessionOptions); _sessionOptions = NULL; }
+    if (_memoryInfo) { api->ReleaseMemoryInfo(_memoryInfo); _memoryInfo = NULL; }
     if (_env) { api->ReleaseEnv(_env); _env = NULL; }
     return nil;
 }
@@ -88,102 +89,107 @@ fail:
     if (count <= 0) { return @[]; }
 
     const OrtApi* api = ortApi();
-    OrtStatus* status = NULL;
-    NSError* internalError = nil;
 
+    // 所有对象在方法顶部声明，避免 goto 跳过非平凡变量初始化。
     std::vector<int64_t> sourceIds(ids, ids + count);
     std::vector<int64_t> sourceMask(count, 1);
-
     std::vector<int64_t> encShape = {1, static_cast<int64_t>(count)};
+
     OrtValue* encInputs[2] = {NULL, NULL};
     OrtValue* encOutput = NULL;
+    OrtTensorTypeAndShapeInfo* encInfo = NULL;
+    std::vector<float> hidden;
+    int64_t srcLen = 0;
+    int64_t hiddenDim = 0;
 
+    OrtValue* decInputs[3] = {NULL, NULL, NULL};
+    OrtValue* decOutput = NULL;
+    OrtTensorTypeAndShapeInfo* decInfo = NULL;
+
+    std::vector<int64_t> targetIds = {kPadToken};
+    NSMutableArray<NSNumber *> *resultArr = [NSMutableArray array];
+    OrtStatus* status = NULL;
+
+    // ---- 编码器 ----
     status = api->CreateTensorWithDataAsOrtValue(
         _memoryInfo, sourceIds.data(), sourceIds.size() * sizeof(int64_t),
         encShape.data(), encShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &encInputs[0]);
-    if (status) goto fail;
+    if (status) goto done;
     status = api->CreateTensorWithDataAsOrtValue(
         _memoryInfo, sourceMask.data(), sourceMask.size() * sizeof(int64_t),
         encShape.data(), encShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &encInputs[1]);
-    if (status) goto fail;
+    if (status) goto done;
 
     const char* encInputNames[2] = {"input_ids", "attention_mask"};
     const char* encOutputNames[1] = {"last_hidden_state"};
     status = api->Run(_encoder, NULL, encInputNames, encInputs, 2,
                       encOutputNames, 1, &encOutput);
-    if (status) goto fail;
+    if (status) goto done;
 
-    OrtTensorTypeAndShapeInfo* encInfo = NULL;
     status = api->GetTensorTypeAndShape(encOutput, &encInfo);
-    if (status) goto fail;
+    if (status) goto done;
     size_t encDims = 0;
     status = api->GetDimensionsCount(encInfo, &encDims);
-    if (status) goto fail;
+    if (status) goto done;
     std::vector<int64_t> encShapeOut(encDims, 0);
     status = api->GetDimensions(encInfo, encShapeOut.data(), encDims);
-    if (status) goto fail;
-    const int64_t srcLen = encShapeOut[1];
-    const int64_t hiddenDim = encShapeOut[2];
+    if (status) goto done;
+    srcLen = encShapeOut[1];
+    hiddenDim = encShapeOut[2];
 
     float* hiddenData = NULL;
     status = api->GetTensorMutableData(encOutput, (void**)&hiddenData);
-    if (status) goto fail;
-    std::vector<float> hidden(hiddenData, hiddenData + srcLen * hiddenDim);
+    if (status) goto done;
+    hidden.assign(hiddenData, hiddenData + srcLen * hiddenDim);
 
     api->ReleaseTensorTypeAndShapeInfo(encInfo);
     encInfo = NULL;
     api->ReleaseValue(encOutput);
     encOutput = NULL;
     api->ReleaseValue(encInputs[0]);
-    api->ReleaseValue(encInputs[1]);
     encInputs[0] = NULL;
+    api->ReleaseValue(encInputs[1]);
     encInputs[1] = NULL;
 
-    std::vector<int64_t> targetIds = {kPadToken};
-    NSMutableArray<NSNumber *> *result = [NSMutableArray array];
-
+    // ---- 解码器贪心循环 ----
     const char* decInputNames[3] = {"input_ids", "encoder_hidden_states", "encoder_attention_mask"};
     const char* decOutputNames[1] = {"logits"};
 
     for (int step = 0; step < kMaxOutputTokens; step++) {
-        OrtValue* decInputs[3] = {NULL, NULL, NULL};
-        OrtValue* decOutput = NULL;
-
         std::vector<int64_t> decShape = {1, static_cast<int64_t>(targetIds.size())};
         std::vector<int64_t> hiddenShape = {1, srcLen, hiddenDim};
 
         status = api->CreateTensorWithDataAsOrtValue(
             _memoryInfo, targetIds.data(), targetIds.size() * sizeof(int64_t),
             decShape.data(), decShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &decInputs[0]);
-        if (status) goto fail;
+        if (status) goto done;
         status = api->CreateTensorWithDataAsOrtValue(
             _memoryInfo, hidden.data(), hidden.size() * sizeof(float),
             hiddenShape.data(), hiddenShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &decInputs[1]);
-        if (status) goto fail;
+        if (status) goto done;
         status = api->CreateTensorWithDataAsOrtValue(
             _memoryInfo, sourceMask.data(), sourceMask.size() * sizeof(int64_t),
             encShape.data(), encShape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &decInputs[2]);
-        if (status) goto fail;
+        if (status) goto done;
 
         status = api->Run(_decoder, NULL, decInputNames, decInputs, 3,
                           decOutputNames, 1, &decOutput);
-        if (status) goto fail;
+        if (status) goto done;
 
-        OrtTensorTypeAndShapeInfo* decInfo = NULL;
         status = api->GetTensorTypeAndShape(decOutput, &decInfo);
-        if (status) goto fail;
+        if (status) goto done;
         size_t decDims = 0;
         status = api->GetDimensionsCount(decInfo, &decDims);
-        if (status) goto fail;
+        if (status) goto done;
         std::vector<int64_t> decShapeOut(decDims, 0);
         status = api->GetDimensions(decInfo, decShapeOut.data(), decDims);
-        if (status) goto fail;
+        if (status) goto done;
         const int64_t tgtLen = decShapeOut[1];
         const int64_t vocabSize = decShapeOut[2];
 
         float* logits = NULL;
         status = api->GetTensorMutableData(decOutput, (void**)&logits);
-        if (status) goto fail;
+        if (status) goto done;
         const float* row = logits + (tgtLen - 1) * vocabSize;
 
         int64_t best = 0;
@@ -196,32 +202,43 @@ fail:
         }
 
         api->ReleaseTensorTypeAndShapeInfo(decInfo);
+        decInfo = NULL;
         api->ReleaseValue(decOutput);
+        decOutput = NULL;
         api->ReleaseValue(decInputs[0]);
+        decInputs[0] = NULL;
         api->ReleaseValue(decInputs[1]);
+        decInputs[1] = NULL;
         api->ReleaseValue(decInputs[2]);
+        decInputs[2] = NULL;
 
         if (best == kEosToken) { break; }
         if (best != kPadToken) {
-            [result addObject:@(best)];
+            [resultArr addObject:@(best)];
         }
         targetIds.push_back(best);
     }
 
-    return result;
-
-fail:
-    if (status) {
-        const char* msg = api->GetErrorMessage(status);
-        internalError = [NSError errorWithDomain:@"MTTranslator" code:2
-            userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithUTF8String:msg ?: "离线翻译推理失败"] }];
-        api->ReleaseStatus(status);
-    }
+done:
     if (encOutput) { api->ReleaseValue(encOutput); }
     if (encInputs[0]) { api->ReleaseValue(encInputs[0]); }
     if (encInputs[1]) { api->ReleaseValue(encInputs[1]); }
-    if (error) { *error = internalError; }
-    return nil;
+    if (decOutput) { api->ReleaseValue(decOutput); }
+    if (decInputs[0]) { api->ReleaseValue(decInputs[0]); }
+    if (decInputs[1]) { api->ReleaseValue(decInputs[1]); }
+    if (decInputs[2]) { api->ReleaseValue(decInputs[2]); }
+    if (decInfo) { api->ReleaseTensorTypeAndShapeInfo(decInfo); }
+
+    if (status) {
+        const char* msg = api->GetErrorMessage(status);
+        if (error) {
+            *error = [NSError errorWithDomain:@"MTTranslator" code:2
+                userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithUTF8String:msg ?: "离线翻译推理失败"] }];
+        }
+        api->ReleaseStatus(status);
+        return nil;
+    }
+    return resultArr;
 }
 
 @end

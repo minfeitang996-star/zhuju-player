@@ -67,6 +67,13 @@ jobs:
           mv onnxruntime.xcframework ThirdParty/
           ls -la ThirdParty/onnxruntime.xcframework
 
+      - name: Patch ORT headers (strip exception specifiers)
+        run: |
+          find ThirdParty/onnxruntime.xcframework -name 'onnxruntime_c_api.h' -print0 | while IFS= read -r -d '' h; do
+            sed -i '' 's/ NO_EXCEPTION//g' "$h"
+          done
+          grep -c NO_EXCEPTION ThirdParty/onnxruntime.xcframework/ios-arm64/Headers/onnxruntime/onnxruntime_c_api.h || true
+
       - name: Generate Xcode project
         run: |
           ls -d ThirdParty/whisper.xcframework
