@@ -31,12 +31,16 @@ targets:
       - framework: ThirdParty/whisper.xcframework
         embed: true
         codeSign: false
+      - framework: ThirdParty/onnxruntime.xcframework
+        embed: false
+        codeSign: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.zhuju.player
         PRODUCT_NAME: ZhuJu
         TARGETED_DEVICE_FAMILY: "1,2"
         OTHER_LDFLAGS: "$(inherited) -lc++ -lz"
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/ThirdParty/onnxruntime.xcframework/ios-arm64/Headers $(SRCROOT)/ThirdParty/onnxruntime.xcframework/ios-arm64/Headers/onnxruntime"
         SWIFT_OBJC_BRIDGING_HEADER: "Sources/Bridge/ZhuJu-Bridging-Header.h"
         ARCHS: "arm64"
         ONLY_ACTIVE_ARCH: "NO"

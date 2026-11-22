@@ -49,6 +49,24 @@ jobs:
           cp -R build-apple/whisper.xcframework "$GITHUB_WORKSPACE/ThirdParty/"
           ls -la "$GITHUB_WORKSPACE/ThirdParty/whisper.xcframework"
 
+      - name: Cache onnxruntime.xcframework
+        id: ortcache
+        uses: actions/cache@v4
+        with:
+          path: ThirdParty/onnxruntime.xcframework
+          key: onnxruntime-xcframework-v1
+
+      - name: Fetch onnxruntime.xcframework
+        if: steps.ortcache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          mkdir -p ThirdParty
+          curl -fL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o ort-libs.zip "https://github.com/minfeitang996-star/zhuju-player/releases/download/deps-ort-1.28.0/onnxruntime-libs-1.28.0.zip"
+          unzip -q ort-libs.zip
+          rm -rf ThirdParty/onnxruntime.xcframework
+          mv onnxruntime.xcframework ThirdParty/
+          ls -la ThirdParty/onnxruntime.xcframework
+
       - name: Generate Xcode project
         run: |
           ls -d ThirdParty/whisper.xcframework

@@ -4,7 +4,6 @@ source 'https://cdn.cocoapods.org'
 target 'ZhuJu' do
   use_frameworks!
   pod 'MobileVLCKit', '~> 3.7.5'
-  pod 'onnxruntime-c'
 end
 
 post_install do |installer|

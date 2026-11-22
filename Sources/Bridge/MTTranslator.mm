@@ -1,6 +1,6 @@
 #import "MTTranslator.h"
 
-#include <onnxruntime_c_api.h>
+#include <onnxruntime/onnxruntime_c_api.h>
 
 #include <vector>
 #include <string>
@@ -42,7 +42,7 @@ const OrtApi* ortApi(void) {
     status = api->CreateSessionOptions(&_sessionOptions);
     if (status) { goto fail; }
     api->SetIntraOpNumThreads(_sessionOptions, 2);
-    api->SetGraphOptimizationLevel(_sessionOptions, ORT_ENABLE_BASIC);
+    api->SetSessionGraphOptimizationLevel(_sessionOptions, ORT_ENABLE_BASIC);
 
     status = api->CreateSession(_env, [encoderPath UTF8String], _sessionOptions, &_encoder);
     if (status) { goto fail; }
@@ -116,9 +116,11 @@ fail:
     OrtTensorTypeAndShapeInfo* encInfo = NULL;
     status = api->GetTensorTypeAndShape(encOutput, &encInfo);
     if (status) goto fail;
-    size_t encDims = 3;
-    int64_t encShapeOut[3] = {0, 0, 0};
-    status = api->GetShape(encInfo, encShapeOut, encDims, &encDims);
+    size_t encDims = 0;
+    status = api->GetDimensionsCount(encInfo, &encDims);
+    if (status) goto fail;
+    std::vector<int64_t> encShapeOut(encDims, 0);
+    status = api->GetDimensions(encInfo, encShapeOut.data(), encDims);
     if (status) goto fail;
     const int64_t srcLen = encShapeOut[1];
     const int64_t hiddenDim = encShapeOut[2];
@@ -170,9 +172,11 @@ fail:
         OrtTensorTypeAndShapeInfo* decInfo = NULL;
         status = api->GetTensorTypeAndShape(decOutput, &decInfo);
         if (status) goto fail;
-        size_t decDims = 3;
-        int64_t decShapeOut[3] = {0, 0, 0};
-        status = api->GetShape(decInfo, decShapeOut, decDims, &decDims);
+        size_t decDims = 0;
+        status = api->GetDimensionsCount(decInfo, &decDims);
+        if (status) goto fail;
+        std::vector<int64_t> decShapeOut(decDims, 0);
+        status = api->GetDimensions(decInfo, decShapeOut.data(), decDims);
         if (status) goto fail;
         const int64_t tgtLen = decShapeOut[1];
         const int64_t vocabSize = decShapeOut[2];
