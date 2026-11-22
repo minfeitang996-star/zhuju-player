@@ -117,7 +117,7 @@ final class WhisperEngine {
         }
 
         let count = whisper_full_n_segments(ctx)
-        lastSegmentCount = count
+        lastSegmentCount = Int(count)
         guard count > 0 else { return }
 
         for index in 0..<count {

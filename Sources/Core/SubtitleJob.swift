@@ -123,7 +123,7 @@ final class SubtitleJob: ObservableObject {
             }
 
             apply(cueCount: cues.count)
-            var finalCues = cues
+            var finalCues = Self.dedupe(cues)
 
             if translate {
                 let config = TranslatorConfig.load()
@@ -131,7 +131,7 @@ final class SubtitleJob: ObservableObject {
                     apply(status: "翻译成中文…", progress: 0.85)
                     do {
                         finalCues = try await SubtitleTranslator.translate(
-                            cues,
+                            finalCues,
                             config: config,
                             onProgress: { value in
                                 self.apply(progress: 0.85 + 0.14 * value)
@@ -205,5 +205,22 @@ final class SubtitleJob: ObservableObject {
                 }
             }
         }
+    }
+
+    /// 去掉空段和相邻重复段：whisper 常会把同一句话在相邻窗口里重复输出，
+    /// 合并时间轴，避免字幕里出现一堆一模一样的行。
+    private static func dedup(_ cues: [SubtitleCue]) -> [SubtitleCue] {
+        var out: [SubtitleCue] = []
+        for cue in cues {
+            let text = cue.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            if let last = out.last,
+               last.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == text.lowercased() {
+                out[out.count - 1].end = max(last.end, cue.end)
+                continue
+            }
+            out.append(SubtitleCue(start: cue.start, end: max(cue.end, cue.start + 0.4), text: text))
+        }
+        return out
     }
 }
