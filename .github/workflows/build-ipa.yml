@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ThirdParty/onnxruntime.xcframework
-          key: onnxruntime-xcframework-v2
+          key: onnxruntime-xcframework-v3
 
       - name: Fetch onnxruntime.xcframework
         if: steps.ortcache.outputs.cache-hit != 'true'
@@ -70,7 +70,7 @@ jobs:
       - name: Patch ORT headers (strip exception specifiers)
         run: |
           find ThirdParty/onnxruntime.xcframework -name '*.h' -print0 | while IFS= read -r -d '' h; do
-            sed -i '' 's/NO_EXCEPTION//g' "$h"
+            sed -E -i '' 's/^([[:space:]]*#[[:space:]]*define[[:space:]]+NO_EXCEPTION).*/\1/' "$h"
           done
           grep -rc NO_EXCEPTION ThirdParty/onnxruntime.xcframework/ios-arm64/Headers || true
 
