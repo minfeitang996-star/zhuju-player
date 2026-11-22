@@ -18,13 +18,14 @@ actor OfflineMT {
             throw FreeTranslationError.failed("离线翻译模型没加载成功")
         }
         let sourceIds = tokenizer.encode(text)
-        let targetIds: [NSNumber]
-        let translated: [Int]
 
-        targetIds = sourceIds.withUnsafeBufferPointer { buffer in
-            engine.translateSourceIds(buffer.baseAddress, count: sourceIds.count, error: nil) ?? []
+        let targetIds: [NSNumber] = try sourceIds.withUnsafeBufferPointer { buffer in
+            guard let ptr = buffer.baseAddress else {
+                throw FreeTranslationError.failed("离线翻译输入为空")
+            }
+            return try engine.translateSourceIds(ptr, count: sourceIds.count)
         }
-        translated = targetIds.map { $0.intValue }
+        let translated = targetIds.map { $0.intValue }
         let result = tokenizer.decode(translated)
         guard !result.isEmpty else { throw FreeTranslationError.failed("离线翻译没返回译文") }
         return result
@@ -45,13 +46,13 @@ actor OfflineMT {
             throw FreeTranslationError.failed(loadFailure!)
         }
 
-        var error: NSError?
-        let engine = MTTranslator(
-            encoderPath: dir.appendingPathComponent("encoder_model.onnx").path,
-            decoderPath: dir.appendingPathComponent("decoder_model.onnx").path,
-            error: &error)
-        guard let engine else {
-            loadFailure = error?.localizedDescription ?? "离线翻译模型加载失败"
+        let engine: MTTranslator
+        do {
+            engine = try MTTranslator(
+                encoderPath: dir.appendingPathComponent("encoder_model.onnx").path,
+                decoderPath: dir.appendingPathComponent("decoder_model.onnx").path)
+        } catch {
+            loadFailure = error.localizedDescription
             throw FreeTranslationError.failed(loadFailure!)
         }
 
