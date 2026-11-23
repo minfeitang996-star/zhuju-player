@@ -63,6 +63,13 @@ final class VLCPlayerContainer: UIView {
         layoutInner()
     }
 
+    func fitDrawableSubviews() {
+        for sub in inner.subviews {
+            sub.frame = inner.bounds
+            sub.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        }
+    }
+
     private func layoutInner() {
         guard bounds.width > 0, bounds.height > 0 else { return }
 
@@ -75,6 +82,9 @@ final class VLCPlayerContainer: UIView {
 
         inner.transform = .identity
         inner.frame = area
+        // VLCKit 把渲染层作为子视图插进 drawable，插入时按当时尺寸定的帧；
+        // 旋转 / 横竖屏切换后要跟着重新撑满，否则画面停在旧比例、填不满屏幕
+        fitDrawableSubviews()
 
         guard mode != .fit else { return }
 
@@ -112,5 +122,8 @@ struct VLCVideoView: UIViewRepresentable {
     func updateUIView(_ uiView: VLCPlayerContainer, context: Context) {
         _ = tick
         uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
+        // 每拍刷新一次：旋转后把 VLC 渲染子视图重新撑满容器
+        uiView.setNeedsLayout()
+        uiView.fitDrawableSubviews()
     }
 }

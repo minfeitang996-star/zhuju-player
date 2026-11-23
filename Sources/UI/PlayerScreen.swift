@@ -454,6 +454,7 @@ struct PlayerScreen: View {
     }
 
     private func handleSingleTap() {
+        guard openPanel == nil else { return }
         pendingTap?.cancel()
         let work = DispatchWorkItem { [self] in self.toggleControlsNow() }
         pendingTap = work
@@ -508,6 +509,7 @@ struct PlayerScreen: View {
 
     /// 长按画面：快进固定秒数（默认 10 秒，可在「手势与操作」里改 10/20/30）
     private func handleLongPress() {
+        guard openPanel == nil else { return }
         guard Prefs.gestureEnabled, Prefs.longPressSkip else { return }
         pendingTap?.cancel()
         let seconds = Prefs.longPressSeconds
@@ -518,6 +520,7 @@ struct PlayerScreen: View {
     }
 
     private func handleDragChanged(_ value: DragGesture.Value, in size: CGSize) {
+        guard openPanel == nil else { return }
         guard Prefs.gestureEnabled else { return }
         if dragAxis == nil {
             let dx = abs(value.translation.width)
@@ -1300,6 +1303,8 @@ struct PlayerScreen: View {
         UserDefaults.standard.set(mode.rawValue, forKey: "videoMode")
         UserDefaults.standard.set(safeArea, forKey: "videoSafeArea")
         Boot.mark("J aspect \(mode.rawValue) safeArea=\(safeArea)")
+        closePanel()
+        showHUD(mode.title + (safeArea ? " · 避开安全区" : ""))
     }
 
     private func scheduleHide() {
