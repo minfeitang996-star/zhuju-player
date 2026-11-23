@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 网络直播源管理：按分类分节展示，手动添加单条流地址，或粘贴 m3u / m3u8 列表一次性导入；支持逐条与批量删除
+/// 网络直播源管理：先按分类进文件夹，文件夹内是频道；支持逐条 / 批量删除，多选线路的频道在播放页切换线路
 struct LiveSourceView: View {
 
     @Environment(\.dismiss) private var dismiss
@@ -8,6 +8,7 @@ struct LiveSourceView: View {
     @AppStorage("themeID") private var themeID: String = "gold"
     private var theme: AppTheme { AppTheme.current(themeID) }
 
+    @State private var currentFolder: String?
     @State private var showAdd = false
     @State private var editing: LiveChannel?
     @State private var active: LiveChannel?
@@ -15,26 +16,33 @@ struct LiveSourceView: View {
     @State private var selectedIDs: Set<UUID> = []
     @State private var showBatchDelete = false
 
-    /// 按分类分组：央视、卫视排前面，其余按名称归类
-    private var grouped: [(category: String, items: [LiveChannel])] {
+    /// 按分类分组：央视、卫视排前面，其他地区按名称排，其他兜底放最后
+    private var grouped: [FolderGroup] {
         let dict = Dictionary(grouping: store.channels) { $0.category }
         let preferred = ["央视", "卫视"]
         let keys = dict.keys.sorted { a, b in
-            let ia = preferred.firstIndex(of: a) ?? 99
-            let ib = preferred.firstIndex(of: b) ?? 99
-            if ia != ib { return ia < ib }
+            if a == b { return false }
+            if preferred.contains(a) && !preferred.contains(b) { return true }
+            if preferred.contains(b) && !preferred.contains(a) { return false }
+            if a == "其他" { return false }
+            if b == "其他" { return true }
             return a.localizedStandardCompare(b) == .orderedAscending
         }
-        return keys.map { category in
-            let items = (dict[category] ?? []).sorted {
+        return keys.map { name in
+            let items = (dict[name] ?? []).sorted {
                 $0.name.localizedStandardCompare($1.name) == .orderedAscending
             }
-            return (category, items)
+            return FolderGroup(name: name, items: items)
         }
     }
 
+    private var currentItems: [LiveChannel] {
+        guard let folder = currentFolder else { return [] }
+        return grouped.first(where: { $0.name == folder })?.items ?? []
+    }
+
     private var allSelected: Bool {
-        !store.channels.isEmpty && selectedIDs.count == store.channels.count
+        !currentItems.isEmpty && selectedIDs.count == currentItems.count
     }
 
     var body: some View {
@@ -44,16 +52,28 @@ struct LiveSourceView: View {
 
                 if store.channels.isEmpty {
                     emptyState
+                } else if currentFolder == nil {
+                    folderList
                 } else {
                     channelList
                 }
             }
-            .navigationTitle("网络直播")
+            .navigationTitle(currentFolder ?? "网络直播")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("关闭") { dismiss() }
-                        .foregroundColor(theme.accent)
+                    if currentFolder == nil {
+                        Button("关闭") { dismiss() }
+                            .foregroundColor(theme.accent)
+                    } else {
+                        Button {
+                            currentFolder = nil
+                            selecting = false
+                            selectedIDs.removeAll()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                    }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
@@ -69,6 +89,7 @@ struct LiveSourceView: View {
                             } label: {
                                 Image(systemName: "checkmark.circle")
                             }
+                            .disabled(currentItems.isEmpty)
                             Button {
                                 showAdd = true
                             } label: {
@@ -98,26 +119,72 @@ struct LiveSourceView: View {
         .tint(theme.accent)
     }
 
+    // MARK: - 文件夹（分类）列表
+
+    private var folderList: some View {
+        List {
+            ForEach(grouped) { group in
+                Button {
+                    currentFolder = group.name
+                } label: {
+                    folderRow(name: group.name, count: group.items.count)
+                }
+                .buttonStyle(HomeFolderStyle(accent: theme.accent))
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    private func folderRow(name: String, count: Int) -> some View {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(theme.accent.opacity(0.16))
+                .frame(width: 54, height: 54)
+                .overlay(
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(theme.accent)
+                )
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text("\(count) 个频道")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.45))
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.22))
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 4)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: - 频道列表
+
     private var channelList: some View {
         List {
-            ForEach(grouped, id: \.category) { group in
-                Section {
-                    ForEach(group.items) { channel in
-                        channelRowView(channel)
-                    }
-                } header: {
-                    HStack(spacing: 8) {
-                        Text(group.category)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.6))
-                        Text("\(group.items.count)")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white.opacity(0.35))
-                        Spacer()
-                    }
-                    .padding(.leading, 4)
-                    .textCase(nil)
-                }
+            ForEach(currentItems) { channel in
+                channelRowView(channel)
             }
         }
         .listStyle(.plain)
@@ -215,7 +282,7 @@ struct LiveSourceView: View {
                 if allSelected {
                     selectedIDs.removeAll()
                 } else {
-                    selectedIDs = Set(store.channels.map { $0.id })
+                    selectedIDs = Set(currentItems.map { $0.id })
                 }
             }
             .font(.system(size: 14, weight: .medium))
@@ -257,10 +324,16 @@ struct LiveSourceView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
-                Text(channel.group ?? channel.url)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.45))
-                    .lineLimit(1)
+                if channel.sourceCount > 1 {
+                    Text("\(channel.sourceCount) 条线路")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.accent)
+                } else {
+                    Text(channel.primaryURL)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.45))
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 0)
@@ -313,6 +386,25 @@ struct LiveSourceView: View {
             }
         }
         .padding(32)
+    }
+}
+
+/// 一个分类文件夹（央视 / 卫视 / 地区 / 其他）
+private struct FolderGroup: Identifiable {
+    let name: String
+    let items: [LiveChannel]
+    var id: String { name }
+}
+
+/// 文件夹入口点按反馈
+private struct HomeFolderStyle: ButtonStyle {
+    let accent: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -380,7 +472,7 @@ private struct LiveSourceForm: View {
                 formMode = mode
                 if let existing {
                     name = existing.name
-                    url = existing.url
+                    url = existing.primaryURL
                 }
             }
         }
@@ -470,7 +562,7 @@ private struct LiveSourceForm: View {
                     .foregroundColor(.red)
             }
 
-            Text("支持标准 #EXTINF 格式，分组标题会一并保留；导入后可在列表里分节查看，支持单选或批量删除。")
+            Text("支持标准 #EXTINF 格式，同名频道的不同地址会自动归为多条线路；导入后按分类放进对应文件夹，支持单选或批量删除。")
                 .font(.system(size: 11.5))
                 .lineSpacing(4)
                 .foregroundColor(.white.opacity(0.4))
@@ -506,7 +598,9 @@ private struct LiveSourceForm: View {
                 throw NSError(domain: "live", code: -3, userInfo: [NSLocalizedDescriptionKey: "没解析到可用频道"])
             }
             let channels = entries.map {
-                LiveChannel(id: UUID(), name: $0.name, url: $0.url, group: $0.group)
+                LiveChannel(id: UUID(), name: $0.name,
+                            sources: [LiveSource(id: UUID(), label: "一源", url: $0.url)],
+                            group: $0.group)
             }
             await MainActor.run {
                 store.add(channels)

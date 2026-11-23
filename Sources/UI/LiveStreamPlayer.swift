@@ -77,7 +77,7 @@ final class LivePlayerController: ObservableObject {
     }
 }
 
-/// 网络直播播放页：VLC 内核直接拉流
+/// 网络直播播放页：进页自动横屏全屏，支持同一频道多条线路切换
 struct LiveStreamPlayer: View {
 
     let channel: LiveChannel
@@ -88,7 +88,12 @@ struct LiveStreamPlayer: View {
 
     @StateObject private var controller = LivePlayerController()
     @State private var showControls = true
-    @State private var retryToken = 0
+    @State private var sourceIndex = 0
+
+    private var currentSource: LiveSource? {
+        guard channel.sources.indices.contains(sourceIndex) else { return nil }
+        return channel.sources[sourceIndex]
+    }
 
     var body: some View {
         ZStack {
@@ -108,10 +113,19 @@ struct LiveStreamPlayer: View {
                 controlsOverlay
             }
         }
-        .onAppear { controller.open(channel.url) }
+        .onAppear {
+            OrientationHelper.apply(.landscapeRight)
+            if let source = currentSource {
+                controller.open(source.url)
+            } else {
+                controller.failed = true
+                controller.loading = false
+            }
+        }
         .onDisappear {
             controller.stop()
             UIApplication.shared.isIdleTimerDisabled = false
+            OrientationHelper.apply(.portrait)
         }
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
@@ -138,22 +152,34 @@ struct LiveStreamPlayer: View {
             Text("连不上这个直播源")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
-            Text("检查地址是否有效，或换个网络再试。")
+            Text("检查地址是否有效，或换个线路 / 网络再试。")
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.5))
-            Button {
-                controller.failed = false
-                controller.loading = true
-                retryToken += 1
-                controller.open(channel.url)
-            } label: {
-                Text("重试")
-                    .font(.system(size: 14, weight: .semibold))
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 10)
-                    .background(theme.accent)
-                    .foregroundColor(.black)
-                    .clipShape(Capsule())
+            HStack(spacing: 12) {
+                Button {
+                    retryCurrent()
+                } label: {
+                    Text("重试")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 10)
+                        .background(theme.accent)
+                        .foregroundColor(.black)
+                        .clipShape(Capsule())
+                }
+                if channel.sources.count > 1 {
+                    Button {
+                        switchToNextSource()
+                    } label: {
+                        Text("切换下一源")
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.14))
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                    }
+                }
             }
         }
         .padding(24)
@@ -177,13 +203,37 @@ struct LiveStreamPlayer: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    if let group = channel.group {
-                        Text(group)
+                    if let category = currentSourceLabel {
+                        Text(category)
                             .font(.system(size: 11))
                             .foregroundColor(.white.opacity(0.5))
                     }
                 }
                 Spacer()
+
+                if channel.sources.count > 1 {
+                    Menu {
+                        ForEach(channel.sources.indices, id: \.self) { index in
+                            Button {
+                                selectSource(index)
+                            } label: {
+                                Label(channel.sources[index].label,
+                                      systemImage: index == sourceIndex ? "checkmark" : "dot")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(currentSource?.label ?? "线路")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 38)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Capsule())
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -204,5 +254,30 @@ struct LiveStreamPlayer: View {
             }
             .padding(.bottom, 28)
         }
+    }
+
+    private var currentSourceLabel: String? {
+        guard channel.sources.count > 1 else { return nil }
+        return "线路 \(sourceIndex + 1)/\(channel.sources.count)"
+    }
+
+    private func selectSource(_ index: Int) {
+        guard channel.sources.indices.contains(index) else { return }
+        sourceIndex = index
+        controller.failed = false
+        controller.loading = true
+        controller.open(channel.sources[index].url)
+    }
+
+    private func retryCurrent() {
+        guard let source = currentSource else { return }
+        controller.failed = false
+        controller.loading = true
+        controller.open(source.url)
+    }
+
+    private func switchToNextSource() {
+        let next = (sourceIndex + 1) % channel.sources.count
+        selectSource(next)
     }
 }

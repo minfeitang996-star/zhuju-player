@@ -108,7 +108,7 @@ struct LibraryView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 14) {
+                    HStack(spacing: 12) {
                         if selecting {
                             Button("完成") {
                                 selecting = false
@@ -126,9 +126,6 @@ struct LibraryView: View {
                                                          : .primary)
                                 }
                             }
-                            Button { showLive = true } label: {
-                                Image(systemName: "waveform")
-                            }
                             Button("选择") {
                                 selecting = true
                             }
@@ -141,11 +138,18 @@ struct LibraryView: View {
                                     .foregroundColor(viewMode == "grid" ? theme.accent : .primary)
                             }
                             Menu {
-                                Button("按名称") { librarySort = "name" }
-                                Button("按大小") { librarySort = "size" }
-                                Button("按日期") { librarySort = "date" }
+                                Button {
+                                    showLive = true
+                                } label: {
+                                    Label("麦克风同传", systemImage: "waveform")
+                                }
+                                Menu("排序方式") {
+                                    Button("按名称") { librarySort = "name" }
+                                    Button("按大小") { librarySort = "size" }
+                                    Button("按日期") { librarySort = "date" }
+                                }
                             } label: {
-                                Image(systemName: "arrow.up.arrow.down")
+                                Image(systemName: "ellipsis.circle")
                             }
                             Menu {
                                 Button {
@@ -514,7 +518,7 @@ struct LibraryView: View {
     // MARK: - 筛选与双视图
 
     private var gridColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+        [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
     }
 
     private var filterChips: some View {
@@ -552,7 +556,7 @@ struct LibraryView: View {
     }
 
     private var gridRow: some View {
-        LazyVGrid(columns: gridColumns, spacing: 14) {
+        LazyVGrid(columns: gridColumns, spacing: 12) {
             ForEach(filteredVideos) { item in
                 videoGridCell(item)
             }
@@ -1072,20 +1076,21 @@ private struct VideoMetaLabel: View {
     }
 }
 
-/// 封面墙网格卡片：统一宽度与封面高度，封面内缩留边，标题固定两行，首帧封面 + 收藏星标 + 分辨率/时长角标
+/// 封面墙网格卡片：封面铺满卡片顶部、固定高度，标题固定两行，整体统一圆角与留白
 private struct GridVideoCard: View {
     let item: MediaItem
     let theme: AppTheme
     let isFav: Bool
     @ObservedObject private var store = VideoMetaStore.shared
 
-    private let coverHeight: CGFloat = 150
+    private let coverHeight: CGFloat = 140
     private var meta: VideoMeta? { store.cache[item.url.path] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
-                VideoThumbnail(url: item.url, width: nil, height: coverHeight, cornerRadius: 14)
+                VideoThumbnail(url: item.url, width: nil, height: coverHeight, cornerRadius: 16)
+                    .frame(maxWidth: .infinity)
                 if isFav {
                     Image(systemName: "star.fill")
                         .font(.system(size: 12, weight: .semibold))
@@ -1118,28 +1123,28 @@ private struct GridVideoCard: View {
                         .padding(8)
                 }
             }
-            .padding(10)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
-                    .frame(minHeight: 34, alignment: .topLeading)
+                    .frame(minHeight: 32, alignment: .topLeading)
                 Text(item.sizeText)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.45))
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, 10)
+            .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.white.opacity(0.08))
         )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 5)
