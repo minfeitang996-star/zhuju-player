@@ -217,6 +217,8 @@ final class PlayerController: ObservableObject {
 
     private func makeMedia(url: URL, subtitle: URL?) -> VLCMedia {
         let media = VLCMedia(url: url)
+        // 1.7.21：快进跳转走快速定位，不等关键帧精确定位，松手后不明显卡一下
+        media.addOption(":input-fast-seek")
 
         // 1.6.3 起字幕默认缩小到 85%，不再糊住画面
         let rawScale = UserDefaults.standard.object(forKey: "subScale") as? Double ?? 85
@@ -320,6 +322,8 @@ struct PlayerScreen: View {
     @State private var scrubWasPlaying = false
     @State private var lastScrubSeekAt: Double = 0
     @State private var lastScrubSeekTarget: Double = 0
+    // 1.7.21：快进/快退后按新位置重启识别，避免字幕长时间不出现
+    @State private var liveRestartToken: Int = 0
 
     private enum PlayerSheet: String, Identifiable {
         case job
@@ -407,6 +411,7 @@ struct PlayerScreen: View {
         pendingTap?.cancel()
         let seconds = Prefs.longPressSeconds
         controller.skip(seconds)
+        scheduleLiveRestart()
         showHUD("长按快进 " + String(Int(seconds)) + " 秒")
         scheduleHide()
     }
@@ -466,7 +471,7 @@ struct PlayerScreen: View {
         scrubTarget = target
 
         let now = Date().timeIntervalSince1970
-        if now - lastScrubSeekAt >= 0.16, abs(target - lastScrubSeekTarget) >= 2.0 {
+        if now - lastScrubSeekAt >= 0.22, abs(target - lastScrubSeekTarget) >= 3.0 {
             lastScrubSeekAt = now
             lastScrubSeekTarget = target
             controller.seekSeconds(target)
@@ -486,8 +491,17 @@ struct PlayerScreen: View {
         guard isScrubbing else { return }
         isScrubbing = false
         let delta = scrubTarget - scrubStart
-        controller.seekSeconds(scrubTarget)
-        if scrubWasPlaying { controller.player.play() }
+        // 拖动中已经定位到附近就不再重复 seek，省掉松手时那一下重复解码的顿感
+        if abs(scrubTarget - lastScrubSeekTarget) >= 0.5 {
+            controller.seekSeconds(scrubTarget)
+            lastScrubSeekTarget = scrubTarget
+        }
+        if scrubWasPlaying {
+            // 等定位落地再恢复播放，避免边 seek 边起播互相抢解码
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [controller] in
+                controller.player.play()
+            }
+        }
         if abs(delta) < 1 {
             hudText = nil
         } else {
@@ -495,6 +509,7 @@ struct PlayerScreen: View {
                     + "\(Int(abs(delta).rounded())) 秒 · "
                     + PlayerController.format(Int32(scrubTarget * 1000)))
         }
+        if abs(delta) > 3 { scheduleLiveRestart() }
         scheduleHide()
     }
 
@@ -773,7 +788,10 @@ struct PlayerScreen: View {
                 Slider(
                     value: Binding(
                         get: { Double(controller.position) },
-                        set: { controller.seek(to: Float($0)) }
+                        set: {
+                            controller.seek(to: Float($0))
+                            scheduleLiveRestart()
+                        }
                     ),
                     in: 0...1
                 )
@@ -803,6 +821,7 @@ struct PlayerScreen: View {
 
                 Button {
                     controller.skip(-Prefs.skipBack)
+                    scheduleLiveRestart()
                 } label: {
                     Image(systemName: "backward.fill")
                         .font(.system(size: 20, weight: .semibold))
@@ -818,6 +837,7 @@ struct PlayerScreen: View {
 
                 Button {
                     controller.skip(Prefs.skipForward)
+                    scheduleLiveRestart()
                 } label: {
                     Image(systemName: "forward.fill")
                         .font(.system(size: 20, weight: .semibold))
@@ -997,6 +1017,10 @@ struct PlayerScreen: View {
         }
         // 连译文都没有（还在翻或翻译失败），至少把原文留住
         if fresh(latest) { return latest }
+        // 快进后新一段还没出来时，宁可保留上一句也不要整条消失（最多 90 秒）
+        if let lastCue = list.last, position <= lastCue.end + 90 {
+            return lastCue
+        }
         return nil
     }
 
@@ -1015,15 +1039,34 @@ struct PlayerScreen: View {
         }
         liveOn = true
         showHUD("边看边译：已开启")
+        startLiveEngine(from: currentSeconds, modelPath: modelURL.path)
+    }
+
+    private func startLiveEngine(from seconds: Double, modelPath: String) {
         liveSub.start(videoURL: current.url,
-                      modelPath: modelURL.path,
-                      from: currentSeconds,
+                      modelPath: modelPath,
+                      from: seconds,
                       language: Prefs.liveSource == "auto" ? nil : Prefs.liveSource) { [controller] in
             let ms = controller.player.time.intValue
             if ms > 0 { return Double(ms) / 1000.0 }
             let length = Double(controller.player.media?.length.intValue ?? 0) / 1000
             guard length > 0 else { return 0 }
             return Double(controller.player.position) * length
+        }
+    }
+
+    /// 快进/快退后：识别流水线还停在旧位置，直接按新位置重开一路，
+    /// 否则新段要等几十秒才会出来，字幕看着就像「消失了」
+    private func scheduleLiveRestart() {
+        guard liveOn else { return }
+        liveRestartToken += 1
+        let token = liveRestartToken
+        let modelID = UserDefaults.standard.string(forKey: "modelID") ?? "ggml-base.bin"
+        guard let modelURL = ModelManager.shared.localURL(modelID) else { return }
+        liveSub.stop()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [self] in
+            guard liveOn, token == liveRestartToken else { return }
+            startLiveEngine(from: currentSeconds, modelPath: modelURL.path)
         }
     }
 
