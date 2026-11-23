@@ -17,6 +17,10 @@ struct VideoThumbnail: View {
         return c
     }()
 
+    /// 正在抽帧的文件名，避免列表滚动/重组时同一个视频重复起后台任务
+    private static var inFlight = Set<NSString>()
+    private static let inFlightLock = NSLock()
+
     var body: some View {
         ZStack {
             if let image {
@@ -55,6 +59,14 @@ struct VideoThumbnail: View {
             image = hit
             return
         }
+        Self.inFlightLock.lock()
+        if Self.inFlight.contains(key) {
+            Self.inFlightLock.unlock()
+            return
+        }
+        Self.inFlight.insert(key)
+        Self.inFlightLock.unlock()
+
         // 抽帧放到后台线程，避免一进文件夹几十条缩略图一起在主线程同步解码把界面卡死
         Task.detached(priority: .userInitiated) {
             let asset = AVURLAsset(url: url)
@@ -66,16 +78,22 @@ struct VideoThumbnail: View {
                 CMTime(seconds: 1.0, preferredTimescale: 600),
                 .zero
             ]
+            var result: UIImage?
             for time in candidates {
                 if let cg = try? generator.copyCGImage(at: time, actualTime: nil) {
-                    let ui = UIImage(cgImage: cg)
-                    await MainActor.run {
-                        Self.cache.setObject(ui, forKey: key)
-                        image = ui
-                    }
-                    return
+                    result = UIImage(cgImage: cg)
+                    break
                 }
             }
+            if let result {
+                await MainActor.run {
+                    Self.cache.setObject(result, forKey: key)
+                    image = result
+                }
+            }
+            Self.inFlightLock.lock()
+            _ = Self.inFlight.remove(key)
+            Self.inFlightLock.unlock()
         }
     }
 }

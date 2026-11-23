@@ -536,6 +536,14 @@ struct LibraryView: View {
         }
     }
 
+    /// 网格列的固定宽度：按屏幕宽度精确算三等分，避免封面理想宽度把整行撑出屏幕、左右被裁
+    private var gridCellWidth: CGFloat {
+        let screen = UIScreen.main.bounds.width
+        let inset: CGFloat = 16
+        let spacing: CGFloat = 12
+        return max(70, (screen - inset * 2 - spacing * 2) / 3)
+    }
+
     private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
@@ -608,7 +616,7 @@ struct LibraryView: View {
             GridVideoCard(item: item, theme: theme, isFav: isFav(item))
         }
         .buttonStyle(HomePressStyle(accent: theme.accent))
-        .frame(maxWidth: .infinity)
+        .frame(width: gridCellWidth)
         .contextMenu { videoContextMenu(item) }
     }
 
