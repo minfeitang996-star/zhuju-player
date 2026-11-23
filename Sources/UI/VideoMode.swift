@@ -116,11 +116,24 @@ final class VLCPlayerContainer: UIView {
         walkView(inner)
     }
 
+    /// 容器 bounds 在首拍 / 旋转过渡期间可能是零或竖屏旧值，拿窗口、再拿屏幕尺寸兜底
+    private func fallbackSize() -> CGSize {
+        if let w = window, w.bounds.width > 1, w.bounds.height > 1 { return w.bounds.size }
+        let sb = UIScreen.main.bounds
+        if sb.width > 1, sb.height > 1 { return sb.size }
+        return bounds.size
+    }
+
     private func resolvedArea() -> CGRect {
-        guard bounds.width > 0, bounds.height > 0 else { return bounds }
+        let base: CGRect
+        if bounds.width > 1, bounds.height > 1 {
+            base = bounds
+        } else {
+            base = CGRect(origin: .zero, size: fallbackSize())
+        }
         let windowInsets = window?.safeAreaInsets ?? .zero
-        let area = respectSafeArea ? bounds.inset(by: windowInsets) : bounds
-        guard area.width > 0, area.height > 0 else { return bounds }
+        let area = respectSafeArea ? base.inset(by: windowInsets) : base
+        guard area.width > 1, area.height > 1 else { return base }
         return area
     }
 
@@ -164,14 +177,50 @@ struct VLCVideoView: UIViewRepresentable {
     var aspect: CGFloat?
     var tick: Int = 0
 
+    final class Coordinator: NSObject, VLCMediaPlayerDelegate {
+        var parent: VLCVideoView
+        weak var view: VLCPlayerContainer?
+
+        init(parent: VLCVideoView) {
+            self.parent = parent
+        }
+
+        func mediaPlayerStateChanged(_ aNotification: Notification!) {
+            relay()
+        }
+
+        func mediaPlayerTimeChanged(_ aNotification: Notification!) {
+            relay()
+        }
+
+        private func relay() {
+            guard let view else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let view = self.view else { return }
+                self.parent.relayout(view)
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
     func makeUIView(context: Context) -> VLCPlayerContainer {
         let view = VLCPlayerContainer()
         player.drawable = view.drawableView
+        context.coordinator.view = view
+        context.coordinator.parent = self
+        player.delegate = context.coordinator
+        view.layoutIfNeeded()
+        relayout(view)
         return view
     }
 
     func updateUIView(_ uiView: VLCPlayerContainer, context: Context) {
         _ = tick
+        context.coordinator.parent = self
+        context.coordinator.view = uiView
         uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
         relayout(uiView)
         // 首帧 / 渲染层可能晚于视图插入，延后几拍再强制重排，避免初次进播停在旧尺寸
@@ -184,9 +233,14 @@ struct VLCVideoView: UIViewRepresentable {
     /// 不依赖视频尺寸回传；适合 / 填充模式复位为 nil，恢复源片比例。
     private func applyNativeAspect(_ player: VLCMediaPlayer, area: CGRect) {
         if mode == .stretch, area.width > 1, area.height > 1 {
-            let w = max(1, Int(area.width.rounded()))
-            let h = max(1, Int(area.height.rounded()))
-            "\(w):\(h)".withCString {
+            var w = area.width
+            var h = area.height
+            // 横屏锁定下首拍区域可能还是竖屏旧比例，归一到宽≥高，避免把画面拉成竖比例
+            let lockedLandscape = Prefs.orientation == "landscape"
+            if lockedLandscape, w < h { swap(&w, &h) }
+            let wi = max(1, Int(w.rounded()))
+            let hi = max(1, Int(h.rounded()))
+            "\(wi):\(hi)".withCString {
                 player.videoAspectRatio = UnsafeMutablePointer(mutating: $0)
             }
         } else {
@@ -199,6 +253,8 @@ struct VLCVideoView: UIViewRepresentable {
         uiView.layoutIfNeeded()
         uiView.fitDrawableSubviews()
         uiView.reportSizeToVideoOutput()
+        // 回到「适配 drawable」的缩放基准，避免停在某次手动缩放留下的绝对倍率上
+        player.scaleFactor = 0
         applyNativeAspect(player, area: uiView.currentArea)
     }
 }
