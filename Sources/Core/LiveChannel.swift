@@ -158,7 +158,7 @@ final class LiveSourceStore: ObservableObject {
         let channel = LiveChannel(
             id: UUID(),
             name: trimmedName.isEmpty ? trimmedURL : trimmedName,
-            sources: [LiveSource(id: UUID(), label: sourceLabel(index: 0), url: trimmedURL)],
+            sources: [LiveSource(id: UUID(), label: Self.sourceLabel(index: 0), url: trimmedURL)],
             group: group
         )
         channels.append(channel)
