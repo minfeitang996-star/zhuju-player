@@ -11,6 +11,7 @@ struct PlaybackSettingsView: View {
     @AppStorage("skipForward") private var skipForward: Double = 15
     @AppStorage("resumeEnabled") private var resumeEnabled: Bool = true
     @AppStorage("keepRate") private var keepRate: Bool = true
+    @AppStorage("repeatOne") private var repeatOne: Bool = false
     @AppStorage("bgAudio") private var bgAudio: Bool = false
 
     @AppStorage("translateTarget") private var translateTarget: String = "简体中文"
@@ -84,6 +85,7 @@ struct PlaybackSettingsView: View {
             Section {
                 Toggle("恢复播放（断点续播）", isOn: $resumeEnabled)
                 Toggle("保持播放速率", isOn: $keepRate)
+                Toggle("单集循环", isOn: $repeatOne)
                 Toggle("后台播放", isOn: $bgAudio)
             } header: {
                 Text("视频播放")

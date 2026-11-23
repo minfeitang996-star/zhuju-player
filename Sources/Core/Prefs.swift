@@ -29,6 +29,7 @@ enum Prefs {
     static var gestureDoubleTapSeek: Bool { UserDefaults.standard.object(forKey: "gestureDoubleTapSeek") as? Bool ?? true }
     static var doubleTapSeconds: Double { UserDefaults.standard.object(forKey: "doubleTapSeconds") as? Double ?? 10 }
     static var autoNext: Bool { UserDefaults.standard.object(forKey: "autoNext") as? Bool ?? true }
+    static var repeatOne: Bool { UserDefaults.standard.object(forKey: "repeatOne") as? Bool ?? false }
     static var longPressSkip: Bool { UserDefaults.standard.object(forKey: "longPressSkip") as? Bool ?? true }
     static var longPressSeconds: Double { UserDefaults.standard.object(forKey: "longPressSeconds") as? Double ?? 10 }
     static var showOrientationLock: Bool { UserDefaults.standard.object(forKey: "showOrientationLock") as? Bool ?? true }

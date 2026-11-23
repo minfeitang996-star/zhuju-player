@@ -85,6 +85,18 @@ final class PlayerController: ObservableObject {
         endReported = false
         UserDefaults.standard.set(video.lastPathComponent, forKey: "lastMedia")
 
+        // 1.7.22：每部片单独记忆倍速 / 音量，没存过再回落到全局默认
+        let name = video.lastPathComponent
+        if let savedRate = UserDefaults.standard.object(forKey: "rate:\(name)") as? Double {
+            rate = Float(savedRate)
+        } else {
+            rate = Float(UserDefaults.standard.object(forKey: "playerRate") as? Double ?? 1.0)
+        }
+        if let savedVol = UserDefaults.standard.object(forKey: "vol:\(name)") as? Double {
+            volume = Float(savedVol)
+        }
+        NowPlayingBridge.shared.setTitle(video.deletingPathExtension().lastPathComponent)
+
         Boot.mark("D player.open \(video.lastPathComponent)")
         let media = makeMedia(url: video, subtitle: subtitle)
         Boot.mark("E media.made")
@@ -121,6 +133,10 @@ final class PlayerController: ObservableObject {
             self.position = self.player.position
             self.timeText = Self.format(self.player.time.intValue)
             self.lengthText = Self.format(self.player.media?.length.intValue ?? 0)
+            NowPlayingBridge.shared.tick(playing: self.player.isPlaying,
+                                        current: Double(self.player.time.intValue) / 1000.0,
+                                        duration: self.lengthSeconds,
+                                        rate: self.rate)
 
             let length = self.player.media?.length.intValue ?? 0
             if length > 0, self.player.position >= 0.995 {
@@ -143,6 +159,9 @@ final class PlayerController: ObservableObject {
     /// 音量 0...2（1 = 原始音量），走 VLC 播放器内部音量，不影响系统音量
     func setVolume(_ value: Float) {
         volume = min(2.0, max(0, value))
+        if let name = videoURL?.lastPathComponent {
+            UserDefaults.standard.set(Double(volume), forKey: "vol:\(name)")
+        }
         applyVolumeToPlayer()
     }
 
@@ -161,6 +180,7 @@ final class PlayerController: ObservableObject {
         saveResume()
         UIApplication.shared.isIdleTimerDisabled = false
         player.stop()
+        NowPlayingBridge.shared.clearInfo()
     }
 
     func togglePlay() {
@@ -250,6 +270,9 @@ final class PlayerController: ObservableObject {
         rate = value
         player.rate = value
         UserDefaults.standard.set(Double(value), forKey: "playerRate")
+        if let name = videoURL?.lastPathComponent {
+            UserDefaults.standard.set(Double(value), forKey: "rate:\(name)")
+        }
         Boot.mark("M rate \(value)")
     }
 
@@ -533,7 +556,34 @@ struct PlayerScreen: View {
         }
     }
 
+    private func wireNowPlaying() {
+        let np = NowPlayingBridge.shared
+        np.onTogglePlayPause = { [weak controller] in controller?.togglePlay() }
+        np.onNext = { [self] in playNeighbor(forward: true) }
+        np.onPrevious = { [self] in playNeighbor(forward: false) }
+        np.onSkipForward = { [self] in
+            controller.skip(Prefs.skipForward)
+            scheduleLiveRestart()
+        }
+        np.onSkipBackward = { [self] in
+            controller.skip(-Prefs.skipBack)
+            scheduleLiveRestart()
+        }
+        np.onSeekTo = { [self] seconds in
+            controller.seekSeconds(seconds)
+            scheduleLiveRestart()
+        }
+    }
+
     private func playNextIfEnabled(_ lib: MediaLibrary) {
+        // 单集循环：播到结尾回到开头重播
+        if Prefs.repeatOne {
+            controller.seekSeconds(0)
+            controller.player.play()
+            scheduleLiveRestart()
+            showHUD("循环重播")
+            return
+        }
         guard Prefs.autoNext else { return }
         guard let next = lib.nextVideo(after: current) else {
             showHUD("已是最后一个视频")
@@ -682,6 +732,7 @@ struct PlayerScreen: View {
             liveOn = false
             let lib = library
             controller.onEnd = { [self] in self.playNextIfEnabled(lib) }
+            wireNowPlaying()
             controller.open(video: current.url, subtitle: current.subtitleURL)
             switch Prefs.orientation {
             case "landscape":
