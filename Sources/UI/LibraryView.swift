@@ -1,6 +1,25 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// 主页视频筛选条件
+private enum VideoFilter: String, CaseIterable, Identifiable {
+    case all
+    case favorite
+    case watching
+    case watched
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "全部"
+        case .favorite: return "收藏"
+        case .watching: return "看到一半"
+        case .watched: return "已看完"
+        }
+    }
+}
+
 struct LibraryView: View {
 
     @EnvironmentObject private var library: MediaLibrary
@@ -36,6 +55,10 @@ struct LibraryView: View {
     @State private var renameFolderURL: URL?
     @State private var renameText = ""
     @State private var shareItem: MediaItem?
+
+    // 视图模式与筛选
+    @AppStorage("libraryViewMode") private var viewMode: String = "list"
+    @State private var filter: VideoFilter = .all
 
     // 多选
     @State private var selecting = false
@@ -102,6 +125,11 @@ struct LibraryView: View {
                             }
                             .font(.system(size: 15))
                             .disabled(videosInCurrentFolder.isEmpty)
+                            Button {
+                                viewMode = viewMode == "list" ? "grid" : "list"
+                            } label: {
+                                Image(systemName: viewMode == "list" ? "square.grid.2x2" : "list.bullet")
+                            }
                             Menu {
                                 Button("按名称") { librarySort = "name" }
                                 Button("按大小") { librarySort = "size" }
@@ -272,10 +300,31 @@ struct LibraryView: View {
         return videos
     }
 
-    /// 搜索过滤 + 排序后的展示列表（文件夹始终在前）
-    private var filteredEntries: [LibraryEntry] {
-        folderEntries + videoEntries.map { LibraryEntry.video($0) }
+    /// 按当前筛选条件过滤后的视频
+    private var filteredVideos: [MediaItem] {
+        videoEntries.filter(matchesFilter)
     }
+
+    private func matchesFilter(_ item: MediaItem) -> Bool {
+        switch filter {
+        case .all: return true
+        case .favorite: return isFav(item)
+        case .watching:
+            if let p = progress(for: item) { return p < 1.0 }
+            return false
+        case .watched: return progress(for: item) == 1.0
+        }
+    }
+
+    private var countAll: Int { videoEntries.count }
+    private var countFav: Int { videoEntries.filter { isFav($0) }.count }
+    private var countWatching: Int {
+        videoEntries.filter {
+            guard let p = progress(for: $0) else { return false }
+            return p < 1.0
+        }.count
+    }
+    private var countWatched: Int { videoEntries.filter { progress(for: $0) == 1.0 }.count }
 
     private var videosInCurrentFolder: [MediaItem] {
         entries.compactMap {
@@ -310,7 +359,7 @@ struct LibraryView: View {
     }
 
     private var videoTotalSizeText: String {
-        let total = videoEntries.reduce(Int64(0)) { $0 + $1.fileSize }
+        let total = filteredVideos.reduce(Int64(0)) { $0 + $1.fileSize }
         let gb = Double(total) / 1_073_741_824
         if gb >= 1 { return String(format: "%.1f GB", gb) }
         return String(format: "%.0f MB", Double(total) / 1_048_576)
@@ -419,69 +468,23 @@ struct LibraryView: View {
             }
 
             if !videoEntries.isEmpty {
-                sectionHeader("视频", count: videoEntries.count, trailing: videoTotalSizeText)
+                filterChips
 
-                ForEach(videoEntries) { item in
-                    Button {
-                        if selecting {
-                            toggleSelection(item)
-                        } else {
-                            openVideo(item)
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            if selecting {
-                                Image(systemName: selectedIDs.contains(item.id) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 21))
-                                    .foregroundColor(selectedIDs.contains(item.id)
-                                                     ? theme.accent
-                                                     : .white.opacity(0.35))
-                            }
-                            videoCard(item)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(HomePressStyle(accent: theme.accent))
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .contextMenu {
-                        if !selecting {
-                            Button {
-                                toggleFavorite(item)
-                            } label: {
-                                Label(isFav(item) ? "取消收藏" : "收藏",
-                                      systemImage: isFav(item) ? "star.fill" : "star")
-                            }
-                            Button {
-                                renameVideoItem = item
-                                renameText = item.title
-                            } label: {
-                                Label("重命名", systemImage: "pencil")
-                            }
-                            Button {
-                                shareItem = item
-                            } label: {
-                                Label("分享视频", systemImage: "square.and.arrow.up")
-                            }
-                            Button {
-                                jobTarget = JobTarget(url: item.url)
-                            } label: {
-                                Label(item.subtitleURL == nil ? "生成字幕" : "重新生成字幕", systemImage: "wand.and.stars")
-                            }
-                            Button {
-                                moveOptions = allFolders()
-                                moveTarget = item
-                            } label: {
-                                Label("移到文件夹…", systemImage: "folder")
-                            }
-                            Button(role: .destructive) {
-                                removeResume(for: item)
-                                library.delete(item)
-                            } label: {
-                                Label("删除", systemImage: "trash")
-                            }
-                        }
+                sectionHeader("视频", count: filteredVideos.count, trailing: videoTotalSizeText)
+
+                if filteredVideos.isEmpty {
+                    Text("这个分类下暂时没有视频")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.35))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                } else if viewMode == "grid" {
+                    gridRow
+                } else {
+                    ForEach(filteredVideos) { item in
+                        videoListRow(item)
                     }
                 }
             }
@@ -492,6 +495,138 @@ struct LibraryView: View {
         .refreshable { library.reload() }
         .safeAreaInset(edge: .bottom) {
             if selecting { selectionBar }
+        }
+    }
+
+    // MARK: - 筛选与双视图
+
+    private var gridColumns: [GridItem] {
+        [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                chip(.all, count: countAll)
+                chip(.favorite, count: countFav)
+                chip(.watching, count: countWatching)
+                chip(.watched, count: countWatched)
+            }
+            .padding(.leading, 4)
+        }
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowBackground(Color.clear)
+    }
+
+    private func chip(_ filterCase: VideoFilter, count: Int) -> some View {
+        let active = filter == filterCase
+        return Button {
+            filter = filterCase
+        } label: {
+            HStack(spacing: 5) {
+                Text(filterCase.title)
+                Text("\(count)")
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundColor(active ? .white : .white.opacity(0.55))
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(active ? theme.accent.opacity(0.22) : Color.white.opacity(0.06)))
+            .overlay(Capsule().stroke(active ? theme.accent.opacity(0.35) : Color.white.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(HomePressStyle(accent: theme.accent))
+    }
+
+    private var gridRow: some View {
+        LazyVGrid(columns: gridColumns, spacing: 14) {
+            ForEach(filteredVideos) { item in
+                videoGridCell(item)
+            }
+        }
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowBackground(Color.clear)
+    }
+
+    private func videoListRow(_ item: MediaItem) -> some View {
+        Button {
+            if selecting {
+                toggleSelection(item)
+            } else {
+                openVideo(item)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                if selecting {
+                    Image(systemName: selectedIDs.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 21))
+                        .foregroundColor(selectedIDs.contains(item.id)
+                                         ? theme.accent
+                                         : .white.opacity(0.35))
+                }
+                videoCard(item)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(HomePressStyle(accent: theme.accent))
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowBackground(Color.clear)
+        .contextMenu { videoContextMenu(item) }
+    }
+
+    private func videoGridCell(_ item: MediaItem) -> some View {
+        Button {
+            if selecting {
+                toggleSelection(item)
+            } else {
+                openVideo(item)
+            }
+        } label: {
+            GridVideoCard(item: item, theme: theme, isFav: isFav(item))
+        }
+        .buttonStyle(HomePressStyle(accent: theme.accent))
+        .contextMenu { videoContextMenu(item) }
+    }
+
+    @ViewBuilder
+    private func videoContextMenu(_ item: MediaItem) -> some View {
+        if !selecting {
+            Button {
+                toggleFavorite(item)
+            } label: {
+                Label(isFav(item) ? "取消收藏" : "收藏",
+                      systemImage: isFav(item) ? "star.fill" : "star")
+            }
+            Button {
+                renameVideoItem = item
+                renameText = item.title
+            } label: {
+                Label("重命名", systemImage: "pencil")
+            }
+            Button {
+                shareItem = item
+            } label: {
+                Label("分享视频", systemImage: "square.and.arrow.up")
+            }
+            Button {
+                jobTarget = JobTarget(url: item.url)
+            } label: {
+                Label(item.subtitleURL == nil ? "生成字幕" : "重新生成字幕", systemImage: "wand.and.stars")
+            }
+            Button {
+                moveOptions = allFolders()
+                moveTarget = item
+            } label: {
+                Label("移到文件夹…", systemImage: "folder")
+            }
+            Button(role: .destructive) {
+                removeResume(for: item)
+                library.delete(item)
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
         }
     }
 
@@ -575,14 +710,18 @@ struct LibraryView: View {
         let locked = FolderLock.isLocked(url)
         return HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(theme.accent)
+                if let cover = library.videos(in: url).first {
+                    VideoThumbnail(url: cover.url, width: 54, height: 54)
+                } else {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(LinearGradient(
+                            colors: [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(theme.accent)
+                }
             }
             .frame(width: 54, height: 54)
 
@@ -916,6 +1055,59 @@ private struct VideoMetaLabel: View {
         }
         .font(.system(size: 11.5))
         .foregroundColor(.white.opacity(0.45))
+        .onAppear { store.load(item.url) }
+    }
+}
+
+/// 封面墙网格卡片：首帧封面 + 收藏星标 + 分辨率角标 + 标题与大小时长
+private struct GridVideoCard: View {
+    let item: MediaItem
+    let theme: AppTheme
+    let isFav: Bool
+    @ObservedObject private var store = VideoMetaStore.shared
+
+    private var meta: VideoMeta? { store.cache[item.url.path] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .topTrailing) {
+                VideoThumbnail(url: item.url, width: nil, height: 150)
+                if isFav {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.accent)
+                        .padding(8)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if let w = meta?.width, let h = meta?.height,
+                   let resolution = VideoMetaStore.resolutionText(w: w, h: h) {
+                    Text(resolution)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.55))
+                        .clipShape(Capsule())
+                        .padding(7)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(item.sizeText)
+                    if let duration = meta?.duration {
+                        Text(VideoMetaStore.durationText(duration))
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.45))
+            }
+        }
         .onAppear { store.load(item.url) }
     }
 }

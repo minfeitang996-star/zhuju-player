@@ -5,7 +5,7 @@ import AVFoundation
 struct VideoThumbnail: View {
 
     let url: URL
-    var width: CGFloat = 62
+    var width: CGFloat? = 62
     var height: CGFloat = 46
     @State private var image: UIImage?
 
