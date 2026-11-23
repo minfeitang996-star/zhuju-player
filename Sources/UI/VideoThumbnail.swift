@@ -15,20 +15,20 @@ struct VideoThumbnail: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.white.opacity(0.08))
             if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 Image(systemName: "play.rectangle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(.white.opacity(0.35))
             }
         }
-        .frame(width: 46, height: 46)
+        .frame(width: 50, height: 50)
         .onAppear { load() }
     }
 

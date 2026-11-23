@@ -43,7 +43,11 @@ struct LibraryView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                theme.background.ignoresSafeArea()
+                LinearGradient(
+                    colors: [theme.background, theme.background.opacity(0.9)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
                 if entries.isEmpty {
                     emptyState
@@ -199,6 +203,7 @@ struct LibraryView: View {
             }
         }
         .navigationViewStyle(.stack)
+        .tint(theme.accent)
         .onAppear { Boot.mark("C library.view") }
     }
 
@@ -282,8 +287,10 @@ struct LibraryView: View {
                 } label: {
                     resumeRow(resume)
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(theme.accent.opacity(0.16))
+                .buttonStyle(HomePressStyle(accent: theme.accent))
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+                .listRowBackground(Color.clear)
             }
 
             ForEach(filteredEntries) { entry in
@@ -294,8 +301,10 @@ struct LibraryView: View {
                     } label: {
                         folderRow(url, count: count)
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(Color.white.opacity(0.06))
+                    .buttonStyle(HomePressStyle(accent: theme.accent))
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+                    .listRowBackground(Color.clear)
                     .contextMenu {
                         if FolderLock.isLocked(url) {
                             Button {
@@ -334,10 +343,10 @@ struct LibraryView: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(selectedIDs.contains(item.id)
-                                       ? theme.accent.opacity(0.14)
-                                       : Color.white.opacity(0.06))
+                    .buttonStyle(HomePressStyle(accent: theme.accent))
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+                    .listRowBackground(Color.clear)
                     .contextMenu {
                         if !selecting {
                             Button {
@@ -428,15 +437,20 @@ struct LibraryView: View {
 
     private func folderRow(_ url: URL, count: Int) -> some View {
         let locked = FolderLock.isLocked(url)
-        return HStack(spacing: 12) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 26))
-                .foregroundColor(theme.accent)
+        return HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(theme.accent.opacity(0.15))
+                .frame(width: 46, height: 46)
+                .overlay(
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(theme.accent)
+                )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(url.lastPathComponent)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 15.5, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if locked {
@@ -446,17 +460,26 @@ struct LibraryView: View {
                     }
                 }
                 Text(locked ? "已加密 · \(BiometricAuth.biometryName)解锁" : "\(count) 个项目")
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray)
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.white.opacity(0.45))
             }
 
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.gray.opacity(0.6))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.25))
         }
-        .padding(.vertical, 6)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.055))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -473,17 +496,22 @@ struct LibraryView: View {
 
     private func resumeRow(_ item: MediaItem) -> some View {
         let saved = UserDefaults.standard.double(forKey: "resume:\(item.url.lastPathComponent)")
-        return HStack(spacing: 12) {
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 34))
-                .foregroundColor(theme.accent)
+        return HStack(spacing: 14) {
+            Circle()
+                .fill(theme.accent.opacity(0.2))
+                .frame(width: 48, height: 48)
+                .overlay(
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(theme.accent)
+                )
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("继续播放 · \(Int(saved * 100))%")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 12.5, weight: .bold))
                     .foregroundColor(theme.accent)
                 Text(item.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14.5, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
             }
@@ -491,10 +519,24 @@ struct LibraryView: View {
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.gray.opacity(0.6))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.25))
         }
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [theme.accent.opacity(0.20), theme.accent.opacity(0.06)],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(theme.accent.opacity(0.22), lineWidth: 1)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -508,10 +550,10 @@ struct LibraryView: View {
     }
 
     private func row(_ item: MediaItem) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             VideoThumbnail(url: item.url)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(item.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
@@ -524,8 +566,8 @@ struct LibraryView: View {
                             .foregroundColor(Color(red: 0.45, green: 0.85, blue: 0.55))
                     }
                 }
-                .font(.system(size: 11))
-                .foregroundColor(.gray)
+                .font(.system(size: 11.5))
+                .foregroundColor(.white.opacity(0.45))
 
                 if let progressValue = progress(for: item) {
                     if progressValue >= 1.0 {
@@ -536,7 +578,7 @@ struct LibraryView: View {
                         HStack(spacing: 6) {
                             ZStack(alignment: .leading) {
                                 Capsule()
-                                    .fill(Color.white.opacity(0.15))
+                                    .fill(Color.white.opacity(0.12))
                                     .frame(width: 90, height: 4)
                                 Capsule()
                                     .fill(theme.accent)
@@ -553,10 +595,19 @@ struct LibraryView: View {
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.gray.opacity(0.6))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.25))
         }
-        .padding(.vertical, 6)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.055))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -565,14 +616,15 @@ struct LibraryView: View {
         VStack(spacing: 16) {
             Image(systemName: "film.stack")
                 .font(.system(size: 52, weight: .light))
-                .foregroundColor(.white.opacity(0.25))
+                .foregroundColor(.white.opacity(0.22))
             Text(path.isEmpty ? "还没有视频" : "这个文件夹是空的")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(.white.opacity(0.9))
             Text("点右上角「+」导入视频或新建文件夹。\n也可以在「文件 App → 我的 iPhone → 糖敏飞视频播放器 → Media」里放文件夹。")
                 .font(.system(size: 13))
+                .lineSpacing(5)
                 .multilineTextAlignment(.center)
-                .foregroundColor(.gray)
+                .foregroundColor(.white.opacity(0.45))
             Button {
                 showImporter = true
             } label: {
@@ -584,6 +636,7 @@ struct LibraryView: View {
                     .foregroundColor(.black)
                     .clipShape(Capsule())
             }
+            .buttonStyle(HomePressStyle(accent: theme.accent))
         }
         .padding(32)
     }
@@ -692,5 +745,16 @@ struct LibraryView: View {
                 showErrors = true
             }
         }
+    }
+}
+/// 主页入口点按：轻微缩放 + 透明度，带柔和回弹
+private struct HomePressStyle: ButtonStyle {
+    let accent: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
