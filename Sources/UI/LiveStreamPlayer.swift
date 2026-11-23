@@ -211,28 +211,26 @@ struct LiveStreamPlayer: View {
                 }
                 Spacer()
 
-                if channel.sources.count > 1 {
-                    Menu {
-                        ForEach(channel.sources.indices, id: \.self) { index in
-                            Button {
-                                selectSource(index)
-                            } label: {
-                                Label(channel.sources[index].label,
-                                      systemImage: index == sourceIndex ? "checkmark" : "dot")
-                            }
+                Menu {
+                    ForEach(channel.sources.indices, id: \.self) { index in
+                        Button {
+                            selectSource(index)
+                        } label: {
+                            Label(channel.sources[index].label,
+                                  systemImage: index == sourceIndex ? "checkmark" : "dot")
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text(currentSource?.label ?? "线路")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .padding(.horizontal, 14)
-                        .frame(height: 38)
-                        .background(Color.black.opacity(0.45))
-                        .clipShape(Capsule())
                     }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(currentSource?.label ?? "线路")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Capsule())
                 }
             }
             .padding(.horizontal, 16)
@@ -257,7 +255,7 @@ struct LiveStreamPlayer: View {
     }
 
     private var currentSourceLabel: String? {
-        guard channel.sources.count > 1 else { return nil }
+        guard !channel.sources.isEmpty else { return nil }
         return "线路 \(sourceIndex + 1)/\(channel.sources.count)"
     }
 

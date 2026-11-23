@@ -517,8 +517,11 @@ struct LibraryView: View {
 
     // MARK: - 筛选与双视图
 
-    private var gridColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    /// 把视频按每行 3 条切块，手动排 HStack，避免 LazyVGrid 在 List 行里进入文件夹后列宽算错
+    private var gridRows: [[MediaItem]] {
+        stride(from: 0, to: filteredVideos.count, by: 3).map { start in
+            Array(filteredVideos[start..<min(start + 3, filteredVideos.count)])
+        }
     }
 
     private var filterChips: some View {
@@ -556,9 +559,16 @@ struct LibraryView: View {
     }
 
     private var gridRow: some View {
-        LazyVGrid(columns: gridColumns, spacing: 12) {
-            ForEach(filteredVideos) { item in
-                videoGridCell(item)
+        VStack(spacing: 12) {
+            ForEach(gridRows.indices, id: \.self) { rowIndex in
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(gridRows[rowIndex]) { item in
+                        videoGridCell(item)
+                    }
+                    ForEach(0..<(3 - gridRows[rowIndex].count)) { _ in
+                        Spacer(minLength: 0)
+                    }
+                }
             }
         }
         .listRowSeparator(.hidden)
@@ -1088,7 +1098,7 @@ private struct GridVideoCard: View {
     private var meta: VideoMeta? { store.cache[item.url.path] }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 VideoThumbnail(url: item.url, width: nil, height: coverHeight, cornerRadius: 16)
                     .frame(maxWidth: .infinity, maxHeight: coverHeight)
@@ -1125,6 +1135,7 @@ private struct GridVideoCard: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: coverHeight)
+            .clipped()
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 网络直播源管理：先按分类进文件夹，文件夹内是频道；支持逐条 / 批量删除，多选线路的频道在播放页切换线路
+/// 网络直播源管理：先按分类进文件夹，文件夹内是频道；支持逐条 / 批量删除，多条线路在播放页切换
 struct LiveSourceView: View {
 
     @Environment(\.dismiss) private var dismiss
@@ -195,45 +195,47 @@ struct LiveSourceView: View {
     }
 
     private func channelRowView(_ channel: LiveChannel) -> some View {
-        HStack(spacing: 8) {
-            if selecting {
-                Image(systemName: selectedIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 21))
-                    .foregroundColor(selectedIDs.contains(channel.id)
-                                     ? theme.accent
-                                     : .white.opacity(0.35))
-            }
-
-            channelRow(channel)
-
-            if !selecting {
-                Menu {
-                    Button {
-                        editing = channel
-                    } label: {
-                        Label("编辑", systemImage: "pencil")
-                    }
-                    Button(role: .destructive) {
-                        store.delete(channel.id)
-                    } label: {
-                        Label("删除", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white.opacity(0.4))
-                        .frame(width: 34, height: 34)
-                }
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button {
             if selecting {
                 toggle(channel.id)
             } else {
                 active = channel
             }
+        } label: {
+            HStack(spacing: 8) {
+                if selecting {
+                    Image(systemName: selectedIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 21))
+                        .foregroundColor(selectedIDs.contains(channel.id)
+                                         ? theme.accent
+                                         : .white.opacity(0.35))
+                }
+
+                channelRow(channel)
+
+                if !selecting {
+                    Menu {
+                        Button {
+                            editing = channel
+                        } label: {
+                            Label("编辑", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            store.delete(channel.id)
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white.opacity(0.4))
+                            .frame(width: 34, height: 34)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(HomeFolderStyle(accent: theme.accent))
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 12))
         .listRowBackground(Color.clear)
@@ -427,6 +429,7 @@ private struct LiveSourceForm: View {
 
     @State private var name = ""
     @State private var url = ""
+    @State private var extraURL = ""
     @State private var m3uURL = ""
     @State private var formMode: FormMode = .single
     @State private var importing = false
@@ -434,6 +437,12 @@ private struct LiveSourceForm: View {
     @State private var errorText: String?
 
     private var isEdit: Bool { existing != nil }
+
+    /// 编辑时实时取仓库里的频道，追加线路后界面立刻刷新
+    private var liveChannel: LiveChannel? {
+        guard let existing else { return nil }
+        return store.channels.first(where: { $0.id == existing.id })
+    }
 
     var body: some View {
         NavigationView {
@@ -501,7 +510,7 @@ private struct LiveSourceForm: View {
                 .background(Color.white.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            Text("直播地址")
+            Text("直播地址（一源）")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.6))
             TextField("http / https / rtsp / rtmp / udp / m3u8", text: $url)
@@ -511,6 +520,52 @@ private struct LiveSourceForm: View {
                 .padding(14)
                 .background(Color.white.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            if isEdit, let channel = liveChannel, channel.sourceCount > 1 {
+                Text("已有线路")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                ForEach(channel.sources) { source in
+                    HStack(spacing: 8) {
+                        Text(source.label)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(theme.accent)
+                            .frame(width: 40)
+                        Text(source.url)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                    .padding(10)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+
+            if isEdit {
+                Text("追加备用线路（可选）")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                TextField("再贴一条同频道的备用地址", text: $extraURL)
+                    .keyboardType(.URL)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                    .padding(14)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Button {
+                    addExtraSource()
+                } label: {
+                    Text("添加为备用线路")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.10))
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
+                }
+                .disabled(!LiveSourceStore.isValidURL(extraURL))
+            }
 
             if let errorText {
                 Text(errorText)
@@ -576,6 +631,13 @@ private struct LiveSourceForm: View {
             store.add(name: name, url: url)
         }
         dismiss()
+    }
+
+    private func addExtraSource() {
+        guard let existing else { return }
+        guard LiveSourceStore.isValidURL(extraURL) else { return }
+        store.appendSource(to: existing.id, url: extraURL)
+        extraURL = ""
     }
 
     private func importM3U() async {
