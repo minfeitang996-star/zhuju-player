@@ -150,8 +150,8 @@ final class VLCPlayerContainer: UIView {
             let factor = max(area.width / fitW, area.height / fitH)
             inner.transform = CGAffineTransform(scaleX: factor, y: factor)
         case .stretch:
-            inner.transform = CGAffineTransform(scaleX: area.width / fitW,
-                                                y: area.height / fitH)
+            // 拉伸由引擎原生画面比例完成（见 applyNativeAspect），这里不再叠加视图变换，避免二次变形
+            break
         }
     }
 }
@@ -180,10 +180,25 @@ struct VLCVideoView: UIViewRepresentable {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { relayout(uiView) }
     }
 
+    /// 拉伸模式：把引擎输出画面比例设成当前屏幕区域比例，让 VLC 直接把画面拉满 drawable，
+    /// 不依赖视频尺寸回传；适合 / 填充模式复位为 nil，恢复源片比例。
+    private func applyNativeAspect(_ player: VLCMediaPlayer, area: CGRect) {
+        if mode == .stretch, area.width > 1, area.height > 1 {
+            let w = max(1, Int(area.width.rounded()))
+            let h = max(1, Int(area.height.rounded()))
+            "\(w):\(h)".withCString {
+                player.videoAspectRatio = UnsafeMutablePointer(mutating: $0)
+            }
+        } else {
+            player.videoAspectRatio = nil
+        }
+    }
+
     private func relayout(_ uiView: VLCPlayerContainer) {
         uiView.setNeedsLayout()
         uiView.layoutIfNeeded()
         uiView.fitDrawableSubviews()
         uiView.reportSizeToVideoOutput()
+        applyNativeAspect(player, area: uiView.currentArea)
     }
 }
