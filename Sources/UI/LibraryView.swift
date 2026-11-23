@@ -903,10 +903,10 @@ private struct VideoMetaLabel: View {
             Text(item.fileExtension.uppercased())
             Text(item.sizeText)
             if let duration = meta?.duration {
-                Text(VideoMeta.durationText(duration))
+                Text(VideoMetaStore.durationText(duration))
             }
             if let w = meta?.width, let h = meta?.height,
-               let resolution = VideoMeta.resolutionText(w: w, h: h) {
+               let resolution = VideoMetaStore.resolutionText(w: w, h: h) {
                 Text(resolution)
             }
             if item.hasSubtitle {
