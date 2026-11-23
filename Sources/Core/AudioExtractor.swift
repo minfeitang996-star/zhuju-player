@@ -87,7 +87,7 @@ enum AudioExtractor {
                 let slice = Array(buffer[0..<windowSamples])
                 buffer.removeFirst(windowSamples)
                 if !(skipSilence && isSilent(slice)) {
-                    onWindow(slice, windowStart)
+                    onWindow(normalize(slice), windowStart)
                     stats.sentSeconds += window
                 } else {
                     stats.skippedSeconds += window
@@ -102,7 +102,7 @@ enum AudioExtractor {
         if !buffer.isEmpty {
             let tailSeconds = Double(buffer.count) / sampleRate
             if !(skipSilence && isSilent(buffer)) {
-                onWindow(buffer, windowStart)
+                onWindow(normalize(buffer), windowStart)
                 stats.sentSeconds += tailSeconds
             } else {
                 stats.skippedSeconds += tailSeconds
@@ -127,6 +127,16 @@ enum AudioExtractor {
         for value in samples { energy += value * value }
         let rms = (energy / Float(samples.count)).squareRoot()
         return rms < 0.002
+    }
+
+    /// 轻量自动增益：整体音量过低时按峰值放大（最多 6 倍），避免小声对白被 whisper 当静音丢段。
+    static func normalize(_ samples: [Float], maxGain: Float = 6.0) -> [Float] {
+        guard !samples.isEmpty else { return samples }
+        var peak: Float = 0
+        for value in samples { peak = max(peak, abs(value)) }
+        guard peak > 0.0001, peak < 0.9 else { return samples }
+        let gain = min(maxGain, 0.9 / peak)
+        return samples.map { $0 * gain }
     }
 
     /// 峰值是否低到不像有声音（中文/日语片偶尔整体音量极低）

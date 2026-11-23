@@ -509,14 +509,7 @@ struct LibraryView: View {
 
     private func row(_ item: MediaItem) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 46, height: 46)
-                Image(systemName: "play.rectangle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(theme.accent)
-            }
+            VideoThumbnail(url: item.url)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)

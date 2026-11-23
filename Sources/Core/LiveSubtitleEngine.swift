@@ -130,7 +130,7 @@ final class LiveSubtitleEngine: ObservableObject {
                 windowStart += chunkSeconds
                 if AudioExtractor.isSilent(slice) { continue }
                 if stopFlag || generation != gen { reader.cancelReading(); return }
-                recognize(engine: engine, slice: slice, start: start, gen: gen)
+                recognize(engine: engine, slice: AudioExtractor.normalize(slice), start: start, gen: gen)
             }
         }
 
