@@ -43,7 +43,6 @@ struct LibraryView: View {
     @State private var path: [URL] = []
     @State private var unlocked: Set<String> = []
     @State private var lockFailed = false
-    @State private var authMessage = ""
     @State private var showNewFolder = false
     @State private var newFolderName = ""
     @State private var moveTarget: MediaItem?
@@ -109,7 +108,7 @@ struct LibraryView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 14) {
                         if selecting {
                             Button("完成") {
                                 selecting = false
@@ -127,6 +126,9 @@ struct LibraryView: View {
                                                          : .primary)
                                 }
                             }
+                            Button { showLive = true } label: {
+                                Image(systemName: "waveform")
+                            }
                             Button("选择") {
                                 selecting = true
                             }
@@ -136,21 +138,13 @@ struct LibraryView: View {
                                 viewMode = viewMode == "list" ? "grid" : "list"
                             } label: {
                                 Image(systemName: viewMode == "list" ? "square.grid.2x2" : "list.bullet")
-                                    .foregroundColor(viewMode == "grid" ? theme.accent : .primary)
                             }
                             Menu {
-                                Button {
-                                    showLive = true
-                                } label: {
-                                    Label("麦克风同传", systemImage: "waveform")
-                                }
-                                Menu("排序方式") {
-                                    Button("按名称") { librarySort = "name" }
-                                    Button("按大小") { librarySort = "size" }
-                                    Button("按日期") { librarySort = "date" }
-                                }
+                                Button("按名称") { librarySort = "name" }
+                                Button("按大小") { librarySort = "size" }
+                                Button("按日期") { librarySort = "date" }
                             } label: {
-                                Image(systemName: "ellipsis.circle")
+                                Image(systemName: "arrow.up.arrow.down")
                             }
                             Menu {
                                 Button {
@@ -196,7 +190,7 @@ struct LibraryView: View {
             .alert("面容或密码验证未通过", isPresented: $lockFailed) {
                 Button("好", role: .cancel) { }
             } message: {
-                Text(authMessage.isEmpty ? "这个文件夹已加密，验证通过才能进去。" : authMessage)
+                Text("这个文件夹已加密，验证通过才能进去。")
             }
             .alert("新建文件夹", isPresented: $showNewFolder) {
                 TextField("文件夹名称", text: $newFolderName)
@@ -428,26 +422,9 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - 列表 / 封面墙
+    // MARK: - 列表
 
     private var list: some View {
-        Group {
-            if viewMode == "grid" && !videoEntries.isEmpty {
-                gridBody
-            } else {
-                listBody
-            }
-        }
-        .searchable(text: $searchText, prompt: "搜视频")
-        .scrollContentBackground(.hidden)
-        .refreshable { library.reload() }
-        .safeAreaInset(edge: .bottom) {
-            if selecting { selectionBar }
-        }
-    }
-
-    /// 列表模式：沿用 List 逐行懒加载
-    private var listBody: some View {
         List {
             if path.isEmpty, let resume = resumeItem {
                 Button {
@@ -466,10 +443,38 @@ struct LibraryView: View {
 
                 ForEach(folderEntries) { entry in
                     if case .folder(let url, let count) = entry {
-                        folderButton(url, count: count)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                            .listRowBackground(Color.clear)
+                        Button {
+                            openFolder(url)
+                        } label: {
+                            folderCard(url, count: count)
+                        }
+                        .buttonStyle(HomePressStyle(accent: theme.accent))
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .contextMenu {
+                            Button {
+                                renameFolderURL = url
+                                renameText = url.lastPathComponent
+                            } label: {
+                                Label("重命名", systemImage: "pencil")
+                            }
+                            if FolderLock.isLocked(url) {
+                                Button {
+                                    unlockAndThen(url) { FolderLock.setLocked(url, false) }
+                                } label: {
+                                    Label("解除加密", systemImage: "lock.open")
+                                }
+                            } else {
+                                Button {
+                                    FolderLock.setLocked(url, true)
+                                    // 加锁后这个会话里也立刻上锁，必须验证才能进去
+                                    unlocked.remove(FolderLock.relativePath(url))
+                                } label: {
+                                    Label("加密这个文件夹", systemImage: "lock.fill")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -487,6 +492,8 @@ struct LibraryView: View {
                         .padding(.vertical, 24)
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
+                } else if viewMode == "grid" {
+                    gridRow
                 } else {
                     ForEach(filteredVideos) { item in
                         videoListRow(item)
@@ -495,68 +502,21 @@ struct LibraryView: View {
             }
         }
         .listStyle(.plain)
-    }
-
-    /// 封面墙模式：LazyVGrid 弹性三等分，列宽由系统等分，卡片等宽、不会溢出压邻卡
-    private var gridBody: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                if path.isEmpty, let resume = resumeItem {
-                    Button {
-                        openVideo(resume)
-                    } label: {
-                        resumeHero(resume)
-                    }
-                    .buttonStyle(HomePressStyle(accent: theme.accent))
-                }
-
-                filterChipsRow
-
-                sectionHeaderRow("视频", count: filteredVideos.count, trailing: videoTotalSizeText)
-
-                if !folderEntries.isEmpty {
-                    VStack(spacing: 12) {
-                        ForEach(folderEntries) { entry in
-                            if case .folder(let url, let count) = entry {
-                                folderButton(url, count: count)
-                            }
-                        }
-                    }
-                }
-
-                if filteredVideos.isEmpty {
-                    Text("这个分类下暂时没有视频")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.35))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
-                } else {
-                    LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 12) {
-                        ForEach(filteredVideos) { item in
-                            videoGridCell(item)
-                        }
-                    }
-                    .padding(.top, 4)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 24)
+        .searchable(text: $searchText, prompt: "搜视频")
+        .scrollContentBackground(.hidden)
+        .refreshable { library.reload() }
+        .safeAreaInset(edge: .bottom) {
+            if selecting { selectionBar }
         }
     }
 
     // MARK: - 筛选与双视图
 
-    /// 封面墙三列弹性网格：列宽由系统按可用宽度等分，不手工猜屏幕宽
     private var gridColumns: [GridItem] {
-        [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12)
-        ]
+        [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
     }
 
-    private var filterChipsRow: some View {
+    private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 chip(.all, count: countAll)
@@ -566,13 +526,9 @@ struct LibraryView: View {
             }
             .padding(.leading, 4)
         }
-    }
-
-    private var filterChips: some View {
-        filterChipsRow
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-            .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowBackground(Color.clear)
     }
 
     private func chip(_ filterCase: VideoFilter, count: Int) -> some View {
@@ -592,6 +548,17 @@ struct LibraryView: View {
             .overlay(Capsule().stroke(active ? theme.accent.opacity(0.35) : Color.white.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(HomePressStyle(accent: theme.accent))
+    }
+
+    private var gridRow: some View {
+        LazyVGrid(columns: gridColumns, spacing: 14) {
+            ForEach(filteredVideos) { item in
+                videoGridCell(item)
+            }
+        }
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowBackground(Color.clear)
     }
 
     private func videoListRow(_ item: MediaItem) -> some View {
@@ -632,7 +599,6 @@ struct LibraryView: View {
             GridVideoCard(item: item, theme: theme, isFav: isFav(item))
         }
         .buttonStyle(HomePressStyle(accent: theme.accent))
-        .frame(maxWidth: .infinity)
         .contextMenu { videoContextMenu(item) }
     }
 
@@ -676,7 +642,7 @@ struct LibraryView: View {
         }
     }
 
-    private func sectionHeaderRow(_ title: String, count: Int, trailing: String? = nil) -> some View {
+    private func sectionHeader(_ title: String, count: Int, trailing: String? = nil) -> some View {
         HStack(spacing: 8) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
@@ -692,16 +658,11 @@ struct LibraryView: View {
             }
         }
         .padding(.leading, 4)
-        .padding(.top, 4)
+        .padding(.top, 16)
         .padding(.bottom, 4)
-    }
-
-    private func sectionHeader(_ title: String, count: Int, trailing: String? = nil) -> some View {
-        sectionHeaderRow(title, count: count, trailing: trailing)
-            .padding(.top, 16)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowBackground(Color.clear)
     }
 
     private var selectionBar: some View {
@@ -752,44 +713,9 @@ struct LibraryView: View {
     private func cardBackground(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return shape
-            .fill(Color.white.opacity(0.08))
-            .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 5)
-    }
-
-    @ViewBuilder
-    private func folderContextMenu(_ url: URL) -> some View {
-        Button {
-            renameFolderURL = url
-            renameText = url.lastPathComponent
-        } label: {
-            Label("重命名", systemImage: "pencil")
-        }
-        if FolderLock.isLocked(url) {
-            Button {
-                unlockAndThen(url) { FolderLock.setLocked(url, false) }
-            } label: {
-                Label("解除加密", systemImage: "lock.open")
-            }
-        } else {
-            Button {
-                FolderLock.setLocked(url, true)
-                // 加锁后这个会话里也立刻上锁，必须验证才能进去
-                unlocked.remove(FolderLock.relativePath(url))
-            } label: {
-                Label("加密这个文件夹", systemImage: "lock.fill")
-            }
-        }
-    }
-
-    private func folderButton(_ url: URL, count: Int) -> some View {
-        Button {
-            openFolder(url)
-        } label: {
-            folderCard(url, count: count)
-        }
-        .buttonStyle(HomePressStyle(accent: theme.accent))
-        .contextMenu { folderContextMenu(url) }
+            .fill(Color.white.opacity(0.07))
+            .overlay(shape.stroke(Color.white.opacity(0.10), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 3)
     }
 
     private func folderCard(_ url: URL, count: Int) -> some View {
@@ -797,9 +723,9 @@ struct LibraryView: View {
         return HStack(spacing: 14) {
             ZStack {
                 if let cover = library.videos(in: url).first {
-                    VideoThumbnail(url: cover.url, width: 54, height: 54, cornerRadius: 14)
+                    VideoThumbnail(url: cover.url, width: 54, height: 54)
                 } else {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(LinearGradient(
                             colors: [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
                             startPoint: .topLeading, endPoint: .bottomTrailing
@@ -810,7 +736,6 @@ struct LibraryView: View {
                 }
             }
             .frame(width: 54, height: 54)
-            .clipped()
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
@@ -1002,21 +927,17 @@ struct LibraryView: View {
 
     private func openFolder(_ url: URL) {
         let rel = FolderLock.relativePath(url)
-        Boot.mark("openFolder \(url.lastPathComponent) locked=\(FolderLock.isLocked(url))")
         guard FolderLock.isLocked(url), !unlocked.contains(rel) else {
             path.append(url)
             return
         }
         Task {
-            Boot.mark("auth start \(url.lastPathComponent)")
-            let outcome = await BiometricAuth.authenticateDetailed(reason: "解锁「\(url.lastPathComponent)」")
-            Boot.mark("auth result \(outcome.message) \(url.lastPathComponent)")
+            let passed = await BiometricAuth.authenticate(reason: "解锁「\(url.lastPathComponent)」")
             await MainActor.run {
-                if outcome == .passed {
+                if passed {
                     unlocked.insert(rel)
                     path.append(url)
                 } else {
-                    authMessage = outcome.message
                     lockFailed = true
                 }
             }
@@ -1027,13 +948,12 @@ struct LibraryView: View {
     private func openVideo(_ item: MediaItem) {
         if let locked = FolderLock.firstLockedAncestor(of: item.url, excluding: unlocked) {
             Task {
-                let outcome = await BiometricAuth.authenticateDetailed(reason: "解锁「\(locked.lastPathComponent)」")
+                let passed = await BiometricAuth.authenticate(reason: "解锁「\(locked.lastPathComponent)」")
                 await MainActor.run {
-                    if outcome == .passed {
+                    if passed {
                         unlocked.insert(FolderLock.relativePath(locked))
                         selected = item
                     } else {
-                        authMessage = outcome.message
                         lockFailed = true
                     }
                 }
@@ -1060,14 +980,9 @@ struct LibraryView: View {
 
     private func unlockAndThen(_ url: URL, action: @escaping () -> Void) {
         Task {
-            let outcome = await BiometricAuth.authenticateDetailed(reason: "验证后解除加密")
+            let passed = await BiometricAuth.authenticate(reason: "验证后解除加密")
             await MainActor.run {
-                if outcome == .passed {
-                    action()
-                } else {
-                    authMessage = outcome.message
-                    lockFailed = true
-                }
+                if passed { action() } else { lockFailed = true }
             }
         }
     }
@@ -1156,26 +1071,24 @@ private struct VideoMetaLabel: View {
     }
 }
 
-/// 封面墙网格卡片：封面固定铺满卡片顶部、固定高度，信息区固定两行，整卡统一裁剪圆角，封面不会溢出压住邻卡
+/// 封面墙网格卡片：首帧封面 + 收藏星标 + 分辨率角标 + 标题与大小时长
 private struct GridVideoCard: View {
     let item: MediaItem
     let theme: AppTheme
     let isFav: Bool
     @ObservedObject private var store = VideoMetaStore.shared
 
-    private let coverHeight: CGFloat = 132
     private var meta: VideoMeta? { store.cache[item.url.path] }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                VideoThumbnail(url: item.url, width: nil, height: coverHeight, cornerRadius: 16)
-                    .frame(maxWidth: .infinity, maxHeight: coverHeight)
+                VideoThumbnail(url: item.url, width: nil, height: 150)
                 if isFav {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 12))
                         .foregroundColor(theme.accent)
-                        .padding(9)
+                        .padding(8)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -1184,53 +1097,29 @@ private struct GridVideoCard: View {
                     Text(resolution)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 7)
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 3)
                         .background(Color.black.opacity(0.55))
                         .clipShape(Capsule())
-                        .padding(8)
+                        .padding(7)
                 }
             }
-            .overlay(alignment: .bottomLeading) {
-                if let duration = meta?.duration {
-                    Text(VideoMetaStore.durationText(duration))
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.black.opacity(0.55))
-                        .clipShape(Capsule())
-                        .padding(8)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: coverHeight)
-            .clipped()
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
-                    .frame(minHeight: 30, alignment: .topLeading)
-                Text(item.sizeText)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.45))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(item.sizeText)
+                    if let duration = meta?.duration {
+                        Text(VideoMetaStore.durationText(duration))
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.45))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
         }
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.08))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 4)
         .onAppear { store.load(item.url) }
     }
 }

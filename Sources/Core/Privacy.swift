@@ -83,32 +83,9 @@ enum FolderLock {
     }
 }
 
-/// 验证结果：通过 / 设备不可用 / 失败带原因 / 用户取消 / 超时
-enum AuthOutcome: Equatable {
-    case passed
-    case unavailable(String)
-    case failed(String)
-    case cancelled
-    case timeout
-
-    var message: String {
-        switch self {
-        case .passed: return "验证通过"
-        case .unavailable(let m): return m
-        case .failed(let m): return m
-        case .cancelled: return "已取消验证"
-        case .timeout: return "验证超时，请再试一次"
-        }
-    }
-}
-
 /// 面容 / 触控 / 设备密码，用系统的 deviceOwnerAuthentication：
 /// 面容优先，识别不出来自动转成输入设备密码，不需要自己做密码界面
 enum BiometricAuth {
-
-    // 强引用当前正在验证的 LAContext，避免异步等待期间被释放导致系统面板不回调
-    private static var retained: [LAContext] = []
-    private static let retainedLock = NSLock()
 
     static var biometryName: String {
         let context = LAContext()
@@ -125,60 +102,16 @@ enum BiometricAuth {
     }
 
     static func authenticate(reason: String) async -> Bool {
-        await authenticateDetailed(reason: reason) == .passed
-    }
-
-    static func authenticateDetailed(reason: String) async -> AuthOutcome {
         let context = LAContext()
         context.localizedFallbackTitle = "输入设备密码"
         context.localizedCancelTitle = "取消"
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            let msg = error?.localizedDescription ?? "这台设备还没设置面容或设备密码"
-            Boot.mark("auth unavailable: \(msg)")
-            return .unavailable(msg)
+            return false
         }
-
-        retainedLock.lock()
-        retained.append(context)
-        retainedLock.unlock()
-
-        return await withCheckedContinuation { (continuation: CheckedContinuation<AuthOutcome, Never>) in
-            var resumed = false
-            let finish: (AuthOutcome) -> Void = { outcome in
-                guard !resumed else { return }
-                resumed = true
-                retainedLock.lock()
-                retained.removeAll { $0 === context }
-                retainedLock.unlock()
-                context.invalidate()
-                continuation.resume(returning: outcome)
-            }
-
-            Boot.mark("auth evaluate: \(reason)")
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, err in
-                if success {
-                    Boot.mark("auth passed")
-                    finish(.passed)
-                } else {
-                    let code = (err as? LAError)?.code
-                    let codeInt = code?.rawValue ?? -1
-                    let msg = err?.localizedDescription ?? "错误码 \(codeInt)"
-                    Boot.mark("auth fail code=\(codeInt) \(msg)")
-                    switch code {
-                    case .userCancel, .appCancel, .systemCancel:
-                        finish(.cancelled)
-                    default:
-                        finish(.failed(msg))
-                    }
-                }
-            }
-
-            // 兜底：验证回调万一迟迟不返回，20 秒后按超时返回，界面不会一直挂住
-            Task {
-                try? await Task.sleep(nanoseconds: 20_000_000_000)
-                Boot.mark("auth timeout")
-                finish(.timeout)
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, _ in
+                continuation.resume(returning: success)
             }
         }
     }

@@ -44,16 +44,6 @@ enum SubtitleFile {
 
 struct MediaItem: Identifiable, Equatable {
     let url: URL
-    /// 扫描时一次性读好的大小与修改时间，避免列表每次重绘都重复走磁盘 stat
-    let size: Int64
-    let modified: Date?
-
-    init(url: URL) {
-        self.url = url
-        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
-        self.size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
-        self.modified = attrs?[.modificationDate] as? Date
-    }
 
     var id: String { url.path }
     var title: String { url.deletingPathExtension().lastPathComponent }
@@ -66,14 +56,20 @@ struct MediaItem: Identifiable, Equatable {
 
     var hasSubtitle: Bool { subtitleURL != nil }
 
-    var fileSize: Int64 { size }
+    var fileSize: Int64 {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+    }
 
-    var modifiedDate: Date? { modified }
+    var modifiedDate: Date? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return attrs?[.modificationDate] as? Date
+    }
 
     var sizeText: String {
-        let gb = Double(size) / 1_073_741_824
+        let gb = Double(fileSize) / 1_073_741_824
         if gb >= 1 { return String(format: "%.1f GB", gb) }
-        return String(format: "%.0f MB", Double(size) / 1_048_576)
+        return String(format: "%.0f MB", Double(fileSize) / 1_048_576)
     }
 }
 
@@ -96,9 +92,6 @@ final class MediaLibrary: ObservableObject {
 
     let root: URL
 
-    /// 文件夹视频数缓存：主页每次重绘都要取计数，不缓存会递归反复扫磁盘
-    private var countCache: [String: Int] = [:]
-
     /// VLC 能解码的常见容器格式，全部支持播放。
     static let videoExtensions: Set<String> = [
         "mp4", "mov", "m4v", "mkv", "avi", "flv", "wmv", "ts", "m2ts", "mts",
@@ -115,7 +108,6 @@ final class MediaLibrary: ObservableObject {
     }
 
     func reload() {
-        countCache.removeAll()
         let files = (try? FileManager.default.contentsOfDirectory(
             at: root,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -217,13 +209,10 @@ final class MediaLibrary: ObservableObject {
     }
 
     func videoCount(in folder: URL) -> Int {
-        let key = folder.path
-        if let cached = countCache[key] { return cached }
         var total = videos(in: folder).count
         for sub in folders(in: folder) {
             total += videoCount(in: sub)
         }
-        countCache[key] = total
         return total
     }
 
