@@ -30,6 +30,13 @@ struct LibraryView: View {
     @State private var searchText = ""
     @AppStorage("librarySort") private var librarySort: String = "name"
 
+    // 收藏 / 重命名 / 分享
+    @State private var favoriteIDs: Set<String> = Prefs.favorites
+    @State private var renameVideoItem: MediaItem?
+    @State private var renameFolderURL: URL?
+    @State private var renameText = ""
+    @State private var shareItem: MediaItem?
+
     // 多选
     @State private var selecting = false
     @State private var selectedIDs: Set<String> = []
@@ -154,6 +161,38 @@ struct LibraryView: View {
                     }
                 }
             }
+            .alert("重命名视频", isPresented: Binding(
+                get: { renameVideoItem != nil },
+                set: { if !$0 { renameVideoItem = nil } }
+            )) {
+                TextField("名称", text: $renameText)
+                Button("取消", role: .cancel) { renameVideoItem = nil }
+                Button("保存") {
+                    if let item = renameVideoItem {
+                        removeResume(for: item)
+                        _ = library.renameVideo(item, to: renameText)
+                    }
+                    renameVideoItem = nil
+                }
+            } message: {
+                Text("保留原扩展名，配对字幕会一起改名。")
+            }
+            .alert("重命名文件夹", isPresented: Binding(
+                get: { renameFolderURL != nil },
+                set: { if !$0 { renameFolderURL = nil } }
+            )) {
+                TextField("文件夹名称", text: $renameText)
+                Button("取消", role: .cancel) { renameFolderURL = nil }
+                Button("保存") {
+                    if let url = renameFolderURL {
+                        _ = library.renameFolder(url, to: renameText)
+                    }
+                    renameFolderURL = nil
+                }
+            }
+            .sheet(item: $shareItem) { item in
+                ShareSheet(url: item.url)
+            }
             .confirmationDialog("移到哪个文件夹", isPresented: Binding(
                 get: { moveTarget != nil },
                 set: { if !$0 { moveTarget = nil } }
@@ -257,6 +296,26 @@ struct LibraryView: View {
         }
     }
 
+    private func isFav(_ item: MediaItem) -> Bool {
+        favoriteIDs.contains(item.url.path)
+    }
+
+    private func toggleFavorite(_ item: MediaItem) {
+        if isFav(item) {
+            favoriteIDs.remove(item.url.path)
+        } else {
+            favoriteIDs.insert(item.url.path)
+        }
+        Prefs.favorites = favoriteIDs
+    }
+
+    private var videoTotalSizeText: String {
+        let total = videoEntries.reduce(Int64(0)) { $0 + $1.fileSize }
+        let gb = Double(total) / 1_073_741_824
+        if gb >= 1 { return String(format: "%.1f GB", gb) }
+        return String(format: "%.0f MB", Double(total) / 1_048_576)
+    }
+
     private func selectedVideos() -> [MediaItem] {
         videosInCurrentFolder.filter { selectedIDs.contains($0.id) }
     }
@@ -333,6 +392,12 @@ struct LibraryView: View {
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowBackground(Color.clear)
                         .contextMenu {
+                            Button {
+                                renameFolderURL = url
+                                renameText = url.lastPathComponent
+                            } label: {
+                                Label("重命名", systemImage: "pencil")
+                            }
                             if FolderLock.isLocked(url) {
                                 Button {
                                     unlockAndThen(url) { FolderLock.setLocked(url, false) }
@@ -354,7 +419,7 @@ struct LibraryView: View {
             }
 
             if !videoEntries.isEmpty {
-                sectionHeader("视频", count: videoEntries.count)
+                sectionHeader("视频", count: videoEntries.count, trailing: videoTotalSizeText)
 
                 ForEach(videoEntries) { item in
                     Button {
@@ -382,6 +447,23 @@ struct LibraryView: View {
                     .listRowBackground(Color.clear)
                     .contextMenu {
                         if !selecting {
+                            Button {
+                                toggleFavorite(item)
+                            } label: {
+                                Label(isFav(item) ? "取消收藏" : "收藏",
+                                      systemImage: isFav(item) ? "star.fill" : "star")
+                            }
+                            Button {
+                                renameVideoItem = item
+                                renameText = item.title
+                            } label: {
+                                Label("重命名", systemImage: "pencil")
+                            }
+                            Button {
+                                shareItem = item
+                            } label: {
+                                Label("分享视频", systemImage: "square.and.arrow.up")
+                            }
                             Button {
                                 jobTarget = JobTarget(url: item.url)
                             } label: {
@@ -413,7 +495,7 @@ struct LibraryView: View {
         }
     }
 
-    private func sectionHeader(_ title: String, count: Int) -> some View {
+    private func sectionHeader(_ title: String, count: Int, trailing: String? = nil) -> some View {
         HStack(spacing: 8) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
@@ -422,6 +504,11 @@ struct LibraryView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white.opacity(0.35))
             Spacer()
+            if let trailing {
+                Text(trailing)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.35))
+            }
         }
         .padding(.leading, 4)
         .padding(.top, 16)
@@ -606,21 +693,19 @@ struct LibraryView: View {
             VideoThumbnail(url: item.url, width: 62, height: 46)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(item.title)
-                    .font(.system(size: 15.5, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-
-                HStack(spacing: 8) {
-                    Text(item.fileExtension.uppercased())
-                    Text(item.sizeText)
-                    if item.hasSubtitle {
-                        Label("字幕", systemImage: "captions.bubble")
-                            .foregroundColor(Color(red: 0.45, green: 0.85, blue: 0.55))
+                HStack(spacing: 6) {
+                    Text(item.title)
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                    if isFav(item) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.accent)
                     }
                 }
-                .font(.system(size: 11.5))
-                .foregroundColor(.white.opacity(0.45))
+
+                VideoMetaLabel(item: item)
 
                 if let progressValue = progress(for: item) {
                     if progressValue >= 1.0 {
@@ -803,5 +888,34 @@ private struct HomePressStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+/// 视频元信息行：格式、大小、时长、分辨率、字幕标记
+private struct VideoMetaLabel: View {
+    let item: MediaItem
+    @ObservedObject private var store = VideoMetaStore.shared
+
+    private var meta: VideoMeta? { store.cache[item.url.path] }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(item.fileExtension.uppercased())
+            Text(item.sizeText)
+            if let duration = meta?.duration {
+                Text(VideoMeta.durationText(duration))
+            }
+            if let w = meta?.width, let h = meta?.height,
+               let resolution = VideoMeta.resolutionText(w: w, h: h) {
+                Text(resolution)
+            }
+            if item.hasSubtitle {
+                Label("字幕", systemImage: "captions.bubble")
+                    .foregroundColor(Color(red: 0.45, green: 0.85, blue: 0.55))
+            }
+        }
+        .font(.system(size: 11.5))
+        .foregroundColor(.white.opacity(0.45))
+        .onAppear { store.load(item.url) }
     }
 }

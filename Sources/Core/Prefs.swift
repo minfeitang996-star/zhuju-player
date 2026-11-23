@@ -54,6 +54,12 @@ enum Prefs {
     /// 片库排序：name / size / date
     static var librarySort: String { UserDefaults.standard.string(forKey: "librarySort") ?? "name" }
 
+    /// 收藏的视频路径集合
+    static var favorites: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "favorites") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "favorites") }
+    }
+
     static var liveSubSize: CGFloat {
         switch liveSubLevel {
         case "large": return 21

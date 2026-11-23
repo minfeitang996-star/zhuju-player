@@ -270,6 +270,48 @@ final class MediaLibrary: ObservableObject {
         reload()
     }
 
+    /// 重命名视频（保留原扩展名），同名配对字幕一起改名
+    @discardableResult
+    func renameVideo(_ item: MediaItem, to newBase: String) -> Bool {
+        let base = newBase.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !base.isEmpty else { return false }
+        let ext = item.url.pathExtension.lowercased()
+        let folder = item.url.deletingLastPathComponent()
+        let candidate = folder.appendingPathComponent(base).appendingPathExtension(ext)
+        guard candidate.path != item.url.path else { return true }
+        let dest = uniqueDestination(for: candidate.lastPathComponent, in: folder)
+        do {
+            try FileManager.default.moveItem(at: item.url, to: dest)
+            if let sub = item.subtitleURL {
+                let newSub = dest.deletingPathExtension().appendingPathExtension("srt")
+                try? FileManager.default.moveItem(at: sub, to: newSub)
+            }
+            reload()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// 重命名文件夹（根目录不允许改名）
+    @discardableResult
+    func renameFolder(_ url: URL, to newName: String) -> Bool {
+        guard url.standardizedFileURL.path != root.standardizedFileURL.path else { return false }
+        let base = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !base.isEmpty else { return false }
+        let parent = url.deletingLastPathComponent()
+        let dest = parent.appendingPathComponent(base)
+        guard dest.path != url.path else { return true }
+        guard !FileManager.default.fileExists(atPath: dest.path) else { return false }
+        do {
+            try FileManager.default.moveItem(at: url, to: dest)
+            reload()
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// 同文件夹里按名称排在当前视频后面的那一个，用来「自动播下一集」
     /// 同文件夹里按名称排在当前视频前面的那一个
     func previousVideo(before item: MediaItem) -> MediaItem? {
