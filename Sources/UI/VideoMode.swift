@@ -19,10 +19,19 @@ enum VideoMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// drawable 容器：VLC 把渲染层作为子视图后插进来，插入即填满
+private final class DrawableInnerView: UIView {
+    override func didAddSubview(_ subview: UIView) {
+        super.didAddSubview(subview)
+        subview.frame = bounds
+        subview.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    }
+}
+
 /// VLC 渲染容器：内层是 VLC 的 drawable，按适配模式做缩放。
 final class VLCPlayerContainer: UIView {
 
-    private let inner = UIView()
+    private let inner = DrawableInnerView()
     private var mode: VideoMode = .fill
     private var respectSafeArea = false
     private var videoSize: CGSize = .zero
@@ -35,6 +44,7 @@ final class VLCPlayerContainer: UIView {
         backgroundColor = .black
         clipsToBounds = true
         inner.backgroundColor = .black
+        inner.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(inner)
     }
 
@@ -43,14 +53,12 @@ final class VLCPlayerContainer: UIView {
         backgroundColor = .black
         clipsToBounds = true
         inner.backgroundColor = .black
+        inner.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(inner)
     }
 
     func update(mode: VideoMode, safeArea: Bool, videoSize: CGSize, aspect: CGFloat?) {
         let newSize = (videoSize.width > 0 && videoSize.height > 0) ? videoSize : self.videoSize
-        if mode == self.mode, safeArea == self.respectSafeArea, aspect == self.aspect, newSize == self.videoSize {
-            return
-        }
         self.mode = mode
         self.respectSafeArea = safeArea
         self.aspect = aspect
@@ -122,8 +130,10 @@ struct VLCVideoView: UIViewRepresentable {
     func updateUIView(_ uiView: VLCPlayerContainer, context: Context) {
         _ = tick
         uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
-        // 每拍刷新一次：旋转后把 VLC 渲染子视图重新撑满容器
+        // 每拍强制立刻重排：旋转 / 首帧尺寸回来后马上按当前容器铺满，
+        // 不用手动切一次模式才触发
         uiView.setNeedsLayout()
+        uiView.layoutIfNeeded()
         uiView.fitDrawableSubviews()
     }
 }
