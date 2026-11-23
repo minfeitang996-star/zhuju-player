@@ -19,7 +19,7 @@ enum VideoMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// drawable 容器：VLC 把渲染层作为子视图后插进来，插入即填满
+/// drawable 容器：VLC 把渲染对象作为子视图 / 子层后插进来，插入即填满
 private final class DrawableInnerView: UIView {
     override func didAddSubview(_ subview: UIView) {
         super.didAddSubview(subview)
@@ -38,6 +38,9 @@ final class VLCPlayerContainer: UIView {
     private var aspect: CGFloat?
 
     var drawableView: UIView { inner }
+
+    /// 当前实际铺给画面的区域（含避开安全区的内缩），供外层取比例
+    var currentArea: CGRect { resolvedArea() }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -71,27 +74,40 @@ final class VLCPlayerContainer: UIView {
         layoutInner()
     }
 
+    /// 递归把 VLC 后插进来的渲染子视图 / 子层全部撑满当前区域
     func fitDrawableSubviews() {
-        for sub in inner.subviews {
-            sub.frame = inner.bounds
-            sub.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        func fitView(_ v: UIView) {
+            v.frame = inner.bounds
+            v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            for sub in v.subviews { fitView(sub) }
         }
+        inner.subviews.forEach(fitView)
+        inner.layer.sublayers?.forEach { $0.frame = inner.bounds }
+        // 个别版本把渲染层挂在容器层上而不是 inner 上，一并兜住
+        layer.sublayers?.forEach {
+            if $0 !== inner.layer { $0.frame = bounds }
+        }
+    }
+
+    private func resolvedArea() -> CGRect {
+        guard bounds.width > 0, bounds.height > 0 else { return bounds }
+        let windowInsets = window?.safeAreaInsets ?? .zero
+        let area = respectSafeArea ? bounds.inset(by: windowInsets) : bounds
+        guard area.width > 0, area.height > 0 else { return bounds }
+        return area
     }
 
     private func layoutInner() {
         guard bounds.width > 0, bounds.height > 0 else { return }
-
-        let windowInsets = window?.safeAreaInsets ?? .zero
-        let area = respectSafeArea ? bounds.inset(by: windowInsets) : bounds
-        guard area.width > 0, area.height > 0 else { return }
+        let area = resolvedArea()
 
         var vs = (videoSize.width > 0 && videoSize.height > 0) ? videoSize : area.size
         if let aspect, aspect > 0 { vs = CGSize(width: aspect, height: 1) }
 
         inner.transform = .identity
         inner.frame = area
-        // VLCKit 把渲染层作为子视图插进 drawable，插入时按当时尺寸定的帧；
-        // 旋转 / 横竖屏切换后要跟着重新撑满，否则画面停在旧比例、填不满屏幕
+        // VLCKit 把渲染对象插到 drawable 里，插入时按当时尺寸定的帧；
+        // 旋转 / 横竖屏切换 / 首帧回来后要跟着重新撑满，否则画面停在旧比例、填不满屏幕
         fitDrawableSubviews()
 
         guard mode != .fit else { return }
@@ -130,8 +146,14 @@ struct VLCVideoView: UIViewRepresentable {
     func updateUIView(_ uiView: VLCPlayerContainer, context: Context) {
         _ = tick
         uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
-        // 每拍强制立刻重排：旋转 / 首帧尺寸回来后马上按当前容器铺满，
-        // 不用手动切一次模式才触发
+        relayout(uiView)
+        // 首帧 / 渲染层可能晚于视图插入，延后几拍再强制重排，避免初次进播停在旧尺寸
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { relayout(uiView) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { relayout(uiView) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { relayout(uiView) }
+    }
+
+    private func relayout(_ uiView: VLCPlayerContainer) {
         uiView.setNeedsLayout()
         uiView.layoutIfNeeded()
         uiView.fitDrawableSubviews()
