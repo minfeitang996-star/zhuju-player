@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 
 /// 列表/网格视频首帧缩略图：异步生成，结果按文件名做内存缓存；生成失败回退默认图标。
-/// width 传 nil 时按可用宽度铺满（网格封面墙用），高度固定。
+/// width 传 nil 时按可用宽度铺满（网格封面墙用），高度固定；外层统一裁剪，图片不会溢出盒子。
 struct VideoThumbnail: View {
 
     let url: URL
@@ -19,26 +19,34 @@ struct VideoThumbnail: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.08))
             if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
             } else {
-                Image(systemName: "play.rectangle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.white.opacity(0.35))
+                placeholder
             }
         }
-        .modifier(ThumbnailFrame(width: width, height: height))
+        .modifier(ThumbnailBox(width: width, height: height))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(Color.white.opacity(0.10), lineWidth: 1)
         )
         .onAppear { load() }
+    }
+
+    private var placeholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [Color.white.opacity(0.10), Color.white.opacity(0.04)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ))
+            Image(systemName: "play.rectangle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.white.opacity(0.35))
+        }
     }
 
     private func load() {
@@ -69,7 +77,7 @@ struct VideoThumbnail: View {
     }
 }
 
-private struct ThumbnailFrame: ViewModifier {
+private struct ThumbnailBox: ViewModifier {
     let width: CGFloat?
     let height: CGFloat
 
@@ -77,7 +85,7 @@ private struct ThumbnailFrame: ViewModifier {
         if let width {
             content.frame(width: width, height: height)
         } else {
-            content.frame(maxWidth: .infinity, idealHeight: height, maxHeight: height)
+            content.frame(maxWidth: .infinity, minHeight: height, idealHeight: height, maxHeight: height)
         }
     }
 }

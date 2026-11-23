@@ -728,9 +728,9 @@ struct LibraryView: View {
         return HStack(spacing: 14) {
             ZStack {
                 if let cover = library.videos(in: url).first {
-                    VideoThumbnail(url: cover.url, width: 54, height: 54)
+                    VideoThumbnail(url: cover.url, width: 54, height: 54, cornerRadius: 14)
                 } else {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(LinearGradient(
                             colors: [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
                             startPoint: .topLeading, endPoint: .bottomTrailing
@@ -741,6 +741,7 @@ struct LibraryView: View {
                 }
             }
             .frame(width: 54, height: 54)
+            .clipped()
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
@@ -1076,21 +1077,21 @@ private struct VideoMetaLabel: View {
     }
 }
 
-/// 封面墙网格卡片：封面铺满卡片顶部、固定高度，标题固定两行，整体统一圆角与留白
+/// 封面墙网格卡片：封面固定铺满卡片顶部、固定高度，信息区固定两行，整卡统一裁剪圆角，封面不会溢出压住邻卡
 private struct GridVideoCard: View {
     let item: MediaItem
     let theme: AppTheme
     let isFav: Bool
     @ObservedObject private var store = VideoMetaStore.shared
 
-    private let coverHeight: CGFloat = 140
+    private let coverHeight: CGFloat = 132
     private var meta: VideoMeta? { store.cache[item.url.path] }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             ZStack(alignment: .topTrailing) {
                 VideoThumbnail(url: item.url, width: nil, height: coverHeight, cornerRadius: 16)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: coverHeight)
                 if isFav {
                     Image(systemName: "star.fill")
                         .font(.system(size: 12, weight: .semibold))
@@ -1123,21 +1124,23 @@ private struct GridVideoCard: View {
                         .padding(8)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: coverHeight)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
-                    .frame(minHeight: 32, alignment: .topLeading)
+                    .frame(minHeight: 30, alignment: .topLeading)
                 Text(item.sizeText)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.45))
+                    .lineLimit(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.white.opacity(0.08))
@@ -1147,7 +1150,7 @@ private struct GridVideoCard: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 5)
+        .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 4)
         .onAppear { store.load(item.url) }
     }
 }
