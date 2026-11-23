@@ -225,7 +225,24 @@ struct LibraryView: View {
                 Button("取消", role: .cancel) { renameFolderURL = nil }
                 Button("保存") {
                     if let url = renameFolderURL {
-                        _ = library.renameFolder(url, to: renameText)
+                        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let newURL = url.deletingLastPathComponent().appendingPathComponent(trimmed)
+                        if library.renameFolder(url, to: renameText) {
+                            // 改名后把加密锁和会话内解锁记录从旧路径迁到新路径，避免文件夹失去保密
+                            FolderLock.migrateRenamedFolder(from: url, to: newURL)
+                            let oldRel = FolderLock.relativePath(url)
+                            let newRel = FolderLock.relativePath(newURL)
+                            if oldRel != newRel, !oldRel.isEmpty {
+                                let toMove = unlocked.filter {
+                                    $0 == oldRel || $0.hasPrefix(oldRel + "/")
+                                }
+                                for rel in toMove {
+                                    let tail = String(rel.dropFirst(oldRel.count))
+                                    unlocked.remove(rel)
+                                    unlocked.insert(newRel + tail)
+                                }
+                            }
+                        }
                     }
                     renameFolderURL = nil
                 }

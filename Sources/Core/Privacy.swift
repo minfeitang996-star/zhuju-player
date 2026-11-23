@@ -48,6 +48,25 @@ enum FolderLock {
         }
     }
 
+    /// 文件夹改名后，把这个文件夹及其嵌套子文件夹的加密键从旧路径整体迁到新路径，
+    /// 否则新路径上没有锁，文件夹就失去保密、任何人都能进
+    static func migrateRenamedFolder(from old: URL, to new: URL) {
+        let oldRel = relativePath(old)
+        let newRel = relativePath(new)
+        guard !oldRel.isEmpty, oldRel != newRel else { return }
+
+        let defaults = UserDefaults.standard
+        for (key, value) in defaults.dictionaryRepresentation() {
+            guard key.hasPrefix(prefix), (value as? Bool) == true else { continue }
+            let rel = String(key.dropFirst(prefix.count))
+            let isSubtree = rel == oldRel || rel.hasPrefix(oldRel + "/")
+            guard isSubtree else { continue }
+            let tail = String(rel.dropFirst(oldRel.count))
+            defaults.set(true, forKey: prefix + newRel + tail)
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     /// 往上找最近一个加密且还没解锁的上级文件夹，没找到返回 nil
     static func firstLockedAncestor(of url: URL, excluding unlocked: Set<String>) -> URL? {
         var current = url.deletingLastPathComponent().standardizedFileURL
