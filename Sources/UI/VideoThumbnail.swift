@@ -21,6 +21,9 @@ struct VideoThumbnail: View {
     private static var inFlight = Set<NSString>()
     private static let inFlightLock = NSLock()
 
+    /// 抽帧并发上限：文件夹一进来几十个视频不要同时解码，避免内存被打爆后假死
+    private static let gate = DispatchSemaphore(value: 4)
+
     var body: some View {
         ZStack {
             if let image {
@@ -69,6 +72,8 @@ struct VideoThumbnail: View {
 
         // 抽帧放到后台线程，避免一进文件夹几十条缩略图一起在主线程同步解码把界面卡死
         Task.detached(priority: .userInitiated) {
+            Self.gate.wait()
+            defer { Self.gate.signal() }
             let asset = AVURLAsset(url: url)
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true

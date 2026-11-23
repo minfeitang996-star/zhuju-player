@@ -1,10 +1,18 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage("themeID") private var themeID: String = "gold"
     private var theme: AppTheme { AppTheme.current(themeID) }
+
+    @State private var showLog = false
+    @State private var logText = ""
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
+    }
 
     private struct Entry {
         let title: String
@@ -30,6 +38,8 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     entriesCard
 
+                    diagnosticCard
+
                     summaryCard
 
                     notesSection
@@ -52,6 +62,9 @@ struct SettingsView: View {
                     Button("关闭") { dismiss() }
                         .foregroundColor(theme.accent)
                 }
+            }
+            .sheet(isPresented: $showLog) {
+                logSheet
             }
         }
         .navigationViewStyle(.stack)
@@ -118,6 +131,68 @@ struct SettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
         .contentShape(Rectangle())
+    }
+
+    private var diagnosticCard: some View {
+        Button {
+            readLog()
+        } label: {
+            HStack(spacing: 15) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(theme.accent.opacity(0.16))
+                        .frame(width: 54, height: 54)
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(theme.accent)
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("诊断日志")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("版本 \(appVersion) · 查看进文件夹/面容卡在哪一步")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.35))
+            }
+            .padding(16)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .buttonStyle(RowPressStyle(accent: theme.accent))
+    }
+
+    private var logSheet: some View {
+        NavigationView {
+            ScrollView {
+                Text(logText.isEmpty ? "（还没有日志）" : logText)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.85))
+                    .lineSpacing(4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+            }
+            .scrollContentBackground(.hidden)
+            .navigationTitle("诊断日志")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("复制全部") {
+                        UIPasteboard.general.string = logText
+                    }
+                    .foregroundColor(theme.accent)
+                }
+            }
+        }
+    }
+
+    private func readLog() {
+        logText = (try? String(contentsOf: Boot.url, encoding: .utf8)) ?? "（还没有日志）"
+        showLog = true
     }
 
     private var summaryCard: some View {
