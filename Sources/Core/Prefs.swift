@@ -32,6 +32,10 @@ enum Prefs {
     static var repeatOne: Bool { UserDefaults.standard.object(forKey: "repeatOne") as? Bool ?? false }
     static var longPressSkip: Bool { UserDefaults.standard.object(forKey: "longPressSkip") as? Bool ?? true }
     static var longPressSeconds: Double { UserDefaults.standard.object(forKey: "longPressSeconds") as? Double ?? 10 }
+    /// 按住按钮临时加速（松开恢复原倍速）
+    static var holdBoostEnabled: Bool { UserDefaults.standard.object(forKey: "holdBoostEnabled") as? Bool ?? true }
+    /// 按住临时倍速倍率
+    static var holdBoostRate: Double { UserDefaults.standard.object(forKey: "holdBoostRate") as? Double ?? 2.0 }
     static var showOrientationLock: Bool { UserDefaults.standard.object(forKey: "showOrientationLock") as? Bool ?? true }
     static var liveSubLevel: String { UserDefaults.standard.string(forKey: "liveSubSize") ?? "small" }
     static var liveSubPosition: String { UserDefaults.standard.string(forKey: "liveSubPos") ?? "low" }

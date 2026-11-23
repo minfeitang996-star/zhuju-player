@@ -47,6 +47,13 @@ struct SystemVolumeView: UIViewRepresentable {
     }
 }
 
+/// 一条可选的内嵌音轨 / 字幕轨
+struct TrackInfo: Identifiable, Equatable {
+    let id: Int
+    let index: Int32
+    let name: String
+}
+
 final class PlayerController: ObservableObject {
 
     let player = VLCMediaPlayer()
@@ -58,6 +65,12 @@ final class PlayerController: ObservableObject {
     @Published var subtitlesEnabled = false
     @Published var rate: Float = 1.0
 
+    /// 内嵌音轨 / 字幕轨列表（播放起来后才会填出来）
+    @Published var audioTracks: [TrackInfo] = []
+    @Published var subtitleTracks: [TrackInfo] = []
+    @Published var currentAudioIndex: Int32 = -1
+    @Published var currentSubtitleIndex: Int32 = -1
+
     private var timer: Timer?
     private var videoURL: URL?
     private var subtitleURL: URL?
@@ -68,6 +81,10 @@ final class PlayerController: ObservableObject {
     var onEnd: (() -> Void)?
     /// 当前音量 0...2（1 = 原始音量）
     private(set) var volume: Float = 1.0
+
+    /// 按住临时倍速：按住期间记住原倍速，松开恢复
+    private var boosting = false
+    private var baseRate: Float = 1.0
 
     init() {
         rate = Float(UserDefaults.standard.object(forKey: "playerRate") as? Double ?? 1.0)
@@ -83,6 +100,11 @@ final class PlayerController: ObservableObject {
         // 1.7.11 字幕默认关闭：有 srt 也不自动挂，必须手动点顶栏字幕键
         subtitlesEnabled = false
         endReported = false
+        audioTracks = []
+        subtitleTracks = []
+        currentAudioIndex = -1
+        currentSubtitleIndex = -1
+        boosting = false
         UserDefaults.standard.set(video.lastPathComponent, forKey: "lastMedia")
 
         // 1.7.22：每部片单独记忆倍速 / 音量，没存过再回落到全局默认
@@ -121,6 +143,10 @@ final class PlayerController: ObservableObject {
             try? AVAudioSession.sharedInstance().setActive(true)
         }
         restoreResume(after: 1.2)
+
+        // 轨道列表要等媒体解析完才填得出来，延后两轮再读
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in self?.refreshTracks() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in self?.refreshTracks() }
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
@@ -174,9 +200,56 @@ final class PlayerController: ObservableObject {
         audio.setValue(NSNumber(value: target), forKey: "volume")
     }
 
+    // MARK: - 内嵌音轨 / 字幕轨
+
+    /// 从 VLC 并行的索引 / 名称数组里组装轨道列表（-1 的禁用伪条目过滤掉）
+    private static func makeTracks(indexes: [Any]?, names: [Any]?) -> [TrackInfo] {
+        let idx = indexes as? [NSNumber] ?? []
+        let nms = names as? [String] ?? []
+        return zip(idx, nms).compactMap { number, name in
+            let trackIndex = number.int32Value
+            guard trackIndex >= 0 else { return nil }
+            return TrackInfo(id: Int(trackIndex), index: trackIndex, name: name)
+        }
+    }
+
+    func refreshTracks() {
+        audioTracks = Self.makeTracks(indexes: player.audioTrackIndexes, names: player.audioTrackNames)
+        subtitleTracks = Self.makeTracks(indexes: player.videoSubTitlesIndexes, names: player.videoSubTitlesNames)
+        currentAudioIndex = player.currentAudioTrackIndex
+        currentSubtitleIndex = player.currentVideoSubTitleIndex
+    }
+
+    func selectAudioTrack(_ track: TrackInfo) {
+        player.currentAudioTrackIndex = track.index
+        currentAudioIndex = track.index
+    }
+
+    /// 传 nil = 关闭内嵌字幕
+    func selectSubtitleTrack(_ track: TrackInfo?) {
+        player.currentVideoSubTitleIndex = track?.index ?? -1
+        currentSubtitleIndex = track?.index ?? -1
+    }
+
+    // MARK: - 按住临时倍速
+
+    func beginBoost() {
+        guard Prefs.holdBoostEnabled, !boosting else { return }
+        baseRate = rate
+        boosting = true
+        player.rate = Float(Prefs.holdBoostRate)
+    }
+
+    func endBoost() {
+        guard boosting else { return }
+        boosting = false
+        player.rate = baseRate
+    }
+
     func close() {
         timer?.invalidate()
         timer = nil
+        endBoost()
         saveResume()
         UIApplication.shared.isIdleTimerDisabled = false
         player.stop()
@@ -340,6 +413,7 @@ struct PlayerScreen: View {
     @State private var orientationLocked = false
     @State private var dragStartPad: CGFloat?
     @State private var openPanel: PlayPanel?
+    @State private var holdingBoost = false
 
     // 1.7.20 横滑快进：拖动期间实时跟手预览 + 节流定位，松手只做一次最终定位
     @State private var isScrubbing = false
@@ -354,6 +428,7 @@ struct PlayerScreen: View {
     private enum PlayerSheet: String, Identifiable {
         case job
         case liveSettings
+        case tracks
         var id: String { rawValue }
     }
 
@@ -768,6 +843,8 @@ struct PlayerScreen: View {
                 JobView(videoURL: current.url)
             case .liveSettings:
                 LiveSettingsView()
+            case .tracks:
+                TrackSettingsView(controller: controller)
             }
         }
     }
@@ -792,6 +869,15 @@ struct PlayerScreen: View {
                 aspectButton
 
                 speedButton
+
+                Button {
+                    controller.refreshTracks()
+                    activeSheet = .tracks
+                } label: {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white.opacity(0.85))
+                }
 
                 Button {
                     controller.toggleSubtitles()
@@ -897,6 +983,26 @@ struct PlayerScreen: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
                 }
+
+                // 按住临时加速：按下提倍速，松开恢复原倍速
+                Image(systemName: "hare")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(holdingBoost ? theme.accent : .white.opacity(Prefs.holdBoostEnabled ? 0.9 : 0.35))
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                if !holdingBoost {
+                                    holdingBoost = true
+                                    controller.beginBoost()
+                                    showHUD("按住加速 " + String(format: "%g×", Prefs.holdBoostRate))
+                                }
+                            }
+                            .onEnded { _ in
+                                holdingBoost = false
+                                controller.endBoost()
+                            }
+                    )
 
                 Button {
                     playNeighbor(forward: true)

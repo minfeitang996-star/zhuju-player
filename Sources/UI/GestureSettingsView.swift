@@ -10,8 +10,11 @@ struct GestureSettingsView: View {
     @AppStorage("longPressSeconds") private var longPressSeconds: Double = 10
     @AppStorage("autoNext") private var autoNext: Bool = true
     @AppStorage("scrubSeconds") private var scrubSeconds: Double = 240
+    @AppStorage("holdBoostEnabled") private var holdBoostEnabled: Bool = true
+    @AppStorage("holdBoostRate") private var holdBoostRate: Double = 2.0
 
     private let pressSeconds: [Double] = [10, 20, 30]
+    private let boostRates: [Double] = [1.5, 2.0, 3.0]
 
     var body: some View {
         Form {
@@ -33,6 +36,21 @@ struct GestureSettingsView: View {
                 Text("手势")
             } footer: {
                 Text("左侧上下滑调亮度，右侧上下滑调音量（手机系统音量，跟侧边按键同步），左右横滑快进快退，双击画面播放/暂停，长按画面快进固定秒数。")
+            }
+
+            Section {
+                Toggle("按住临时加速", isOn: $holdBoostEnabled)
+                if holdBoostEnabled {
+                    Picker("加速倍率", selection: $holdBoostRate) {
+                        ForEach(boostRates, id: \.self) { value in
+                            Text(String(format: "%g×", value)).tag(value)
+                        }
+                    }
+                }
+            } header: {
+                Text("按住倍速")
+            } footer: {
+                Text("播放控制栏的兔子键：按住临时提速，松开自动回到原来的倍速。")
             }
 
             Section {
