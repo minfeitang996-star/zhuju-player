@@ -498,7 +498,19 @@ struct LibraryView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                 } else if viewMode == "grid" {
-                    gridRow
+                    ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(row) { item in
+                                videoGridCell(item)
+                            }
+                            ForEach(0..<(3 - row.count)) { _ in
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                    }
                 } else {
                     ForEach(filteredVideos) { item in
                         videoListRow(item)
@@ -556,24 +568,6 @@ struct LibraryView: View {
             .overlay(Capsule().stroke(active ? theme.accent.opacity(0.35) : Color.white.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(HomePressStyle(accent: theme.accent))
-    }
-
-    private var gridRow: some View {
-        VStack(spacing: 12) {
-            ForEach(gridRows.indices, id: \.self) { rowIndex in
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(gridRows[rowIndex]) { item in
-                        videoGridCell(item)
-                    }
-                    ForEach(0..<(3 - gridRows[rowIndex].count)) { _ in
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-        }
-        .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-        .listRowBackground(Color.clear)
     }
 
     private func videoListRow(_ item: MediaItem) -> some View {
@@ -944,12 +938,15 @@ struct LibraryView: View {
 
     private func openFolder(_ url: URL) {
         let rel = FolderLock.relativePath(url)
+        Boot.mark("openFolder \(url.lastPathComponent) locked=\(FolderLock.isLocked(url))")
         guard FolderLock.isLocked(url), !unlocked.contains(rel) else {
             path.append(url)
             return
         }
         Task {
+            Boot.mark("auth start \(url.lastPathComponent)")
             let passed = await BiometricAuth.authenticate(reason: "解锁「\(url.lastPathComponent)」")
+            Boot.mark("auth result \(passed) \(url.lastPathComponent)")
             await MainActor.run {
                 if passed {
                     unlocked.insert(rel)

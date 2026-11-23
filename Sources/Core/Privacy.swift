@@ -102,16 +102,29 @@ enum BiometricAuth {
     }
 
     static func authenticate(reason: String) async -> Bool {
-        let context = LAContext()
-        context.localizedFallbackTitle = "输入设备密码"
-        context.localizedCancelTitle = "取消"
-        var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            return false
-        }
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, _ in
-                continuation.resume(returning: success)
+        await MainActor.run {
+            let context = LAContext()
+            context.localizedFallbackTitle = "输入设备密码"
+            context.localizedCancelTitle = "取消"
+            var error: NSError?
+            guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+                return false
+            }
+            return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                var resumed = false
+                let resumeOnce: (Bool) -> Void = { value in
+                    guard !resumed else { return }
+                    resumed = true
+                    continuation.resume(returning: value)
+                }
+                context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, _ in
+                    resumeOnce(success)
+                }
+                // 兜底：验证回调万一迟迟不返回，12 秒后按失败返回，界面不会一直挂住
+                Task {
+                    try? await Task.sleep(nanoseconds: 12_000_000_000)
+                    resumeOnce(false)
+                }
             }
         }
     }
