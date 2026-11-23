@@ -175,6 +175,21 @@ final class PlayerController: ObservableObject {
         player.position = value
     }
 
+    /// 当前媒体总时长（秒），拿不到返回 0
+    var lengthSeconds: Double {
+        Double(player.media?.length.intValue ?? 0) / 1000.0
+    }
+
+    /// 绝对秒定位（1.7.20 横滑快进专用），返回实际落到的秒数
+    @discardableResult
+    func seekSeconds(_ seconds: Double) -> Double {
+        let length = lengthSeconds
+        guard length > 1 else { return 0 }
+        let clamped = min(max(0.2, seconds), length - 0.4)
+        player.position = Float(clamped / length)
+        return clamped
+    }
+
     /// 按秒快进/快退（负数=后退）
     func skip(_ seconds: Double) {
         let length = Double(player.media?.length.intValue ?? 0) / 1000.0
@@ -298,6 +313,14 @@ struct PlayerScreen: View {
     @State private var dragStartPad: CGFloat?
     @State private var openPanel: PlayPanel?
 
+    // 1.7.20 横滑快进：拖动期间实时跟手预览 + 节流定位，松手只做一次最终定位
+    @State private var isScrubbing = false
+    @State private var scrubStart: Double = 0
+    @State private var scrubTarget: Double = 0
+    @State private var scrubWasPlaying = false
+    @State private var lastScrubSeekAt: Double = 0
+    @State private var lastScrubSeekTarget: Double = 0
+
     private enum PlayerSheet: String, Identifiable {
         case job
         case liveSettings
@@ -393,14 +416,18 @@ struct PlayerScreen: View {
         if dragAxis == nil {
             let dx = abs(value.translation.width)
             let dy = abs(value.translation.height)
-            guard max(dx, dy) > 14 else { return }
+            guard max(dx, dy) > 10 else { return }
             dragAxis = dx > dy ? "h" : "v"
             if dragAxis == "v" {
                 baseBrightness = UIScreen.main.brightness
                 baseVolume = SystemVolumeBridge.shared.currentVolume
             } else {
-                return
+                beginScrub()
             }
+        }
+        if dragAxis == "h" {
+            updateScrub(value.translation.width, width: max(1, size.width))
+            return
         }
         guard dragAxis == "v" else { return }
         let delta = -value.translation.height / max(1, size.height)
@@ -415,15 +442,71 @@ struct PlayerScreen: View {
         }
     }
 
+    // MARK: - 横滑快进（跟手）
+
+    private func beginScrub() {
+        scrubStart = currentSeconds
+        scrubTarget = scrubStart
+        scrubWasPlaying = controller.player.isPlaying
+        lastScrubSeekAt = 0
+        lastScrubSeekTarget = scrubStart
+        isScrubbing = true
+        // 拖动期间先暂停，避免 VLC 边解码边跳帧，定位更顺、不卡音
+        controller.player.pause()
+        hudText = scrubHUD()
+    }
+
+    private func updateScrub(_ dx: CGFloat, width: CGFloat) {
+        guard isScrubbing else { return }
+        let length = controller.lengthSeconds
+        guard length > 1 else { hudText = scrubHUD(); return }
+        // 横滑满一屏约 240 秒；轻滑更细腻，不会一滑就飞出去
+        let seconds = Double(dx / width) * 240.0
+        let target = min(max(0.2, scrubStart + seconds), length - 0.4)
+        scrubTarget = target
+
+        let now = Date().timeIntervalSince1970
+        if now - lastScrubSeekAt >= 0.16, abs(target - lastScrubSeekTarget) >= 2.0 {
+            lastScrubSeekAt = now
+            lastScrubSeekTarget = target
+            controller.seekSeconds(target)
+        }
+        hudText = scrubHUD()
+    }
+
+    private func scrubHUD() -> String {
+        let delta = scrubTarget - scrubStart
+        let sign = delta >= 0 ? "快进" : "快退"
+        let secs = Int(abs(delta).rounded())
+        let cur = PlayerController.format(Int32(scrubTarget * 1000))
+        return "\(sign) \(secs) 秒 · \(cur) / \(controller.lengthText)"
+    }
+
+    private func finishScrub() {
+        guard isScrubbing else { return }
+        isScrubbing = false
+        let delta = scrubTarget - scrubStart
+        controller.seekSeconds(scrubTarget)
+        if scrubWasPlaying { controller.player.play() }
+        if abs(delta) < 1 {
+            hudText = nil
+        } else {
+            showHUD((delta > 0 ? "快进 " : "快退 ")
+                    + "\(Int(abs(delta).rounded())) 秒 · "
+                    + PlayerController.format(Int32(scrubTarget * 1000)))
+        }
+        scheduleHide()
+    }
+
     private func handleDragEnded(_ value: DragGesture.Value, in size: CGSize) {
         let axis = dragAxis
         dragAxis = nil
-        guard axis == "h" else { return }
-        let dx = value.translation.width
-        guard abs(dx) > 45 else { return }
-        let seconds = min(120.0, max(10.0, Double(abs(dx)) / 6.0))
-        controller.skip(dx > 0 ? seconds : -seconds)
-        showHUD(dx > 0 ? "快进 \(Int(seconds)) 秒" : "快退 \(Int(seconds)) 秒")
+        if axis == "h" {
+            updateScrub(value.translation.width, width: max(1, size.width))
+            finishScrub()
+            return
+        }
+        guard axis == "v" else { return }
     }
 
     private func showHUD(_ text: String) {
@@ -479,7 +562,7 @@ struct PlayerScreen: View {
                             .onEnded { _ in handleLongPress() }
                     )
                     .gesture(
-                        DragGesture(minimumDistance: 24)
+                        DragGesture(minimumDistance: 12)
                             .onChanged { value in
                                 handleDragChanged(value, in: geo.size)
                             }
@@ -891,15 +974,30 @@ struct PlayerScreen: View {
         return 0
     }
 
+    /// 当前该显示哪一段：优先「最新且有译文」；
+    /// 新一段译文还没回来时保持上一条中文（1.7.20 修复译文一闪就没）
     private var activeLiveCue: LiveCue? {
-        guard !liveSub.cues.isEmpty else { return nil }
+        let list = liveSub.cues
+        guard !list.isEmpty else { return nil }
         let position = currentSeconds
         // 拿不到进度时也不藏字，直接显示最新识别结果
-        if position <= 0 { return liveSub.cues.last }
-        let candidates = liveSub.cues.filter { $0.start <= position + 4.0 }
-        guard let last = candidates.last else { return nil }
-        if position > last.end + 12 { return nil }
-        return last
+        if position <= 0 { return list.last }
+
+        let candidates = list.filter { $0.start <= position + 4.0 }
+        guard let latest = candidates.last ?? list.first else { return nil }
+
+        func fresh(_ cue: LiveCue) -> Bool { position <= cue.end + 18 }
+
+        // 最新一段已经有译文，直接用
+        if latest.translated?.isEmpty == false, fresh(latest) { return latest }
+        // 否则退到最近一条有译文的，别让中文忽然消失
+        if let translatedCue = candidates.last(where: { $0.translated?.isEmpty == false }),
+           fresh(translatedCue) {
+            return translatedCue
+        }
+        // 连译文都没有（还在翻或翻译失败），至少把原文留住
+        if fresh(latest) { return latest }
+        return nil
     }
 
     private func toggleLive() {
