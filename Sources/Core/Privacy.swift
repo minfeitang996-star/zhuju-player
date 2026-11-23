@@ -161,9 +161,10 @@ enum BiometricAuth {
                     Boot.mark("auth passed")
                     finish(.passed)
                 } else {
-                    let code = (err as? LAError)?.code ?? .unknown
-                    let msg = err?.localizedDescription ?? "错误码 \(code.rawValue)"
-                    Boot.mark("auth fail code=\(code.rawValue) \(msg)")
+                    let code = (err as? LAError)?.code
+                    let codeInt = code?.rawValue ?? -1
+                    let msg = err?.localizedDescription ?? "错误码 \(codeInt)"
+                    Boot.mark("auth fail code=\(codeInt) \(msg)")
                     switch code {
                     case .userCancel, .appCancel, .systemCancel:
                         finish(.cancelled)
