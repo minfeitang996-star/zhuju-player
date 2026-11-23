@@ -77,7 +77,7 @@ final class LivePlayerController: ObservableObject {
     }
 }
 
-/// 网络直播播放页：进页自动横屏全屏，支持同一频道多条线路切换
+/// 网络直播播放页：进页自动横屏全屏，支持同一频道多条线路切换与画面适配
 struct LiveStreamPlayer: View {
 
     let channel: LiveChannel
@@ -92,31 +92,67 @@ struct LiveStreamPlayer: View {
     @State private var liveMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "liveVideoMode") ?? "fill") ?? .fill
     @State private var liveSafeArea: Bool = UserDefaults.standard.object(forKey: "liveVideoSafeArea") as? Bool ?? false
 
+    /// 顶栏下拉面板改成自绘：系统 Menu 在横屏全屏里弹出 / 收起会带一次整体重排，画面跟着闪
+    private enum LivePanel {
+        case aspect
+        case source
+    }
+    @State private var openPanel: LivePanel?
+    @State private var layoutTick = 0
+
     private var currentSource: LiveSource? {
         guard channel.sources.indices.contains(sourceIndex) else { return nil }
         return channel.sources[sourceIndex]
     }
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-            VLCVideoView(player: controller.player, mode: liveMode, safeArea: liveSafeArea, aspect: nil)
+                VLCVideoView(player: controller.player, mode: liveMode, safeArea: liveSafeArea, aspect: nil, tick: layoutTick)
+                    .ignoresSafeArea()
 
-            if controller.loading {
-                loadingOverlay
+                // 透明手势层：点画面切换控制条，点面板外关闭面板
+                Color.clear
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if openPanel != nil {
+                            openPanel = nil
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                        }
+                    }
+
+                if controller.loading {
+                    loadingOverlay
+                }
+
+                if controller.failed {
+                    failedOverlay
+                }
+
+                if showControls {
+                    controlsOverlay(insets: geo.safeAreaInsets)
+                }
+
+                if let panel = openPanel {
+                    panelOverlay(panel, insets: geo.safeAreaInsets)
+                }
             }
-
-            if controller.failed {
-                failedOverlay
-            }
-
-            if showControls {
-                controlsOverlay
+            .onChange(of: geo.size) { _ in
+                // 转屏后容器尺寸变了，逼 VLC 渲染层按新尺寸重新铺满
+                layoutTick += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { layoutTick += 1 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
             }
         }
         .onAppear {
             OrientationHelper.apply(.landscapeRight)
+            // requestGeometryUpdate 在 fullScreenCover 刚出现时经常被系统忽略，隔两拍再要两次
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { OrientationHelper.apply(.landscapeRight) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { OrientationHelper.apply(.landscapeRight) }
             if let source = currentSource {
                 controller.open(source.url)
             } else {
@@ -125,12 +161,10 @@ struct LiveStreamPlayer: View {
             }
         }
         .onDisappear {
+            openPanel = nil
             controller.stop()
             UIApplication.shared.isIdleTimerDisabled = false
             OrientationHelper.apply(.portrait)
-        }
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
         }
         .navigationBarHidden(true)
         .statusBar(hidden: !showControls)
@@ -187,7 +221,7 @@ struct LiveStreamPlayer: View {
         .padding(24)
     }
 
-    private var controlsOverlay: some View {
+    private func controlsOverlay(insets: EdgeInsets) -> some View {
         VStack {
             HStack(spacing: 12) {
                 Button {
@@ -200,6 +234,8 @@ struct LiveStreamPlayer: View {
                         .background(Color.black.opacity(0.45))
                         .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text(channel.name)
                         .font(.system(size: 16, weight: .semibold))
@@ -211,17 +247,11 @@ struct LiveStreamPlayer: View {
                             .foregroundColor(.white.opacity(0.5))
                     }
                 }
+
                 Spacer()
 
-                Menu {
-                    ForEach(channel.sources.indices, id: \.self) { index in
-                        Button {
-                            selectSource(index)
-                        } label: {
-                            Label(channel.sources[index].label,
-                                  systemImage: index == sourceIndex ? "checkmark" : "dot")
-                        }
-                    }
+                Button {
+                    openPanel = (openPanel == .source) ? nil : .source
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
@@ -232,32 +262,30 @@ struct LiveStreamPlayer: View {
                     .padding(.horizontal, 14)
                     .frame(height: 38)
                     .background(Color.black.opacity(0.45))
+                    .foregroundColor(.white)
                     .clipShape(Capsule())
                 }
+                .buttonStyle(.plain)
 
-                Menu {
-                    aspectButton(.fit, safeArea: false, title: "适合")
-                    aspectButton(.fill, safeArea: false, title: "填充")
-                    aspectButton(.stretch, safeArea: false, title: "拉伸")
-                    Divider()
-                    aspectButton(.fit, safeArea: true, title: "适合 · 避开安全区")
-                    aspectButton(.fill, safeArea: true, title: "填充 · 避开安全区")
-                    aspectButton(.stretch, safeArea: true, title: "拉伸 · 避开安全区")
+                Button {
+                    openPanel = (openPanel == .aspect) ? nil : .aspect
                 } label: {
                     Image(systemName: "aspectratio")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(openPanel == .aspect ? theme.accent : .white)
                         .frame(width: 38, height: 38)
                         .background(Color.black.opacity(0.45))
                         .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .padding(.top, 12 + insets.top)
+            .padding(.leading, 16 + insets.leading)
+            .padding(.trailing, 16 + insets.trailing)
 
             Spacer()
 
-            HStack(spacing: 22) {
+            HStack(spacing: 20) {
                 Button {
                     controller.toggle()
                 } label: {
@@ -268,9 +296,107 @@ struct LiveStreamPlayer: View {
                         .background(Color.black.opacity(0.45))
                         .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
+
+                // 系统偶尔会拒绝自动转屏（尤其开着竖屏方向锁时），给一个手动强制横屏的入口
+                Button {
+                    OrientationHelper.apply(.landscapeRight)
+                    layoutTick += 1
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { layoutTick += 1 }
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.bottom, 28)
+            .padding(.bottom, 18 + insets.bottom)
         }
+    }
+
+    private func panelOverlay(_ panel: LivePanel, insets: EdgeInsets) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture { openPanel = nil }
+
+            VStack(alignment: .leading, spacing: 0) {
+                if panel == .aspect {
+                    panelRow("适合", active: liveMode == .fit && !liveSafeArea) {
+                        selectAspect(.fit, false)
+                    }
+                    panelRow("填充", active: liveMode == .fill && !liveSafeArea) {
+                        selectAspect(.fill, false)
+                    }
+                    panelRow("拉伸", active: liveMode == .stretch && !liveSafeArea) {
+                        selectAspect(.stretch, false)
+                    }
+                    panelDivider
+                    panelRow("适合 · 避开安全区", active: liveMode == .fit && liveSafeArea) {
+                        selectAspect(.fit, true)
+                    }
+                    panelRow("填充 · 避开安全区", active: liveMode == .fill && liveSafeArea) {
+                        selectAspect(.fill, true)
+                    }
+                    panelRow("拉伸 · 避开安全区", active: liveMode == .stretch && liveSafeArea) {
+                        selectAspect(.stretch, true)
+                    }
+                } else {
+                    if channel.sources.isEmpty {
+                        Text("没有可用线路")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.55))
+                            .padding(16)
+                    } else {
+                        ForEach(channel.sources.indices, id: \.self) { index in
+                            panelRow(channel.sources[index].label, active: index == sourceIndex) {
+                                selectSource(index)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(width: 250)
+            .background(Color(white: 0.13).opacity(0.97))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .padding(.top, 58 + insets.top)
+            .padding(.trailing, 16 + insets.trailing)
+        }
+    }
+
+    private func panelRow(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+        } label: {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 15))
+                    .foregroundColor(.white)
+                Spacer()
+                if active {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.accent)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var panelDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.08))
+            .frame(height: 1)
     }
 
     private var currentSourceLabel: String? {
@@ -278,27 +404,25 @@ struct LiveStreamPlayer: View {
         return "线路 \(sourceIndex + 1)/\(channel.sources.count)"
     }
 
-    private func aspectButton(_ mode: VideoMode, safeArea: Bool, title: String) -> some View {
-        Button {
-            selectAspect(mode, safeArea)
-        } label: {
-            Label(title, systemImage: liveMode == mode && liveSafeArea == safeArea ? "checkmark" : "dot")
-        }
-    }
-
     private func selectAspect(_ mode: VideoMode, _ safe: Bool) {
         liveMode = mode
         liveSafeArea = safe
         UserDefaults.standard.set(mode.rawValue, forKey: "liveVideoMode")
         UserDefaults.standard.set(safe, forKey: "liveVideoSafeArea")
+        openPanel = nil
+        layoutTick += 1
     }
 
     private func selectSource(_ index: Int) {
         guard channel.sources.indices.contains(index) else { return }
+        openPanel = nil
+        // 点当前正在播的这条不重启媒体，否则画面会黑一下
+        if index == sourceIndex && (controller.playing || controller.loading) { return }
         sourceIndex = index
         controller.failed = false
         controller.loading = true
         controller.open(channel.sources[index].url)
+        layoutTick += 1
     }
 
     private func retryCurrent() {

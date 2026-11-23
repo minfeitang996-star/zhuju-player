@@ -180,6 +180,12 @@ struct VLCVideoView: UIViewRepresentable {
     final class Coordinator: NSObject, VLCMediaPlayerDelegate {
         var parent: VLCVideoView
         weak var view: VLCPlayerContainer?
+        // 记住上次真正应用过的参数：SwiftUI 每次重建 body 都会调 updateUIView，
+        // 没变就不重排，避免点个按钮画面跟着闪一下
+        var lastMode: VideoMode?
+        var lastSafeArea: Bool?
+        var lastAspect: CGFloat?
+        var lastTick: Int?
 
         init(parent: VLCVideoView) {
             self.parent = parent
@@ -189,8 +195,9 @@ struct VLCVideoView: UIViewRepresentable {
             relay()
         }
 
+        // 播放中 VLC 每秒回调多次时间变化；每次回调都强制重排渲染层会让画面一直抖 / 闪，
+        // 这里不再跟着时间回调重排，尺寸变化由 layoutSubviews 和布局 tick 负责
         func mediaPlayerTimeChanged(_ aNotification: Notification!) {
-            relay()
         }
 
         private func relay() {
@@ -218,9 +225,20 @@ struct VLCVideoView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: VLCPlayerContainer, context: Context) {
-        _ = tick
         context.coordinator.parent = self
         context.coordinator.view = uiView
+
+        let c = context.coordinator
+        let changed = c.lastMode != mode
+            || c.lastSafeArea != safeArea
+            || c.lastAspect != aspect
+            || c.lastTick != tick
+        c.lastMode = mode
+        c.lastSafeArea = safeArea
+        c.lastAspect = aspect
+        c.lastTick = tick
+        guard changed else { return }
+
         uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
         relayout(uiView)
         // 首帧 / 渲染层可能晚于视图插入，延后几拍再强制重排，避免初次进播停在旧尺寸
@@ -232,6 +250,8 @@ struct VLCVideoView: UIViewRepresentable {
     /// 拉伸模式：把引擎输出画面比例设成当前屏幕区域比例，让 VLC 直接把画面拉满 drawable，
     /// 不依赖视频尺寸回传；适合 / 填充模式复位为 nil，恢复源片比例。
     private func applyNativeAspect(_ player: VLCMediaPlayer, area: CGRect) {
+        // 媒体还没挂上时不要动 videoAspectRatio，VLCKit 在没有媒体时改这个容易出问题
+        guard player.media != nil else { return }
         if mode == .stretch, area.width > 1, area.height > 1 {
             var w = area.width
             var h = area.height
