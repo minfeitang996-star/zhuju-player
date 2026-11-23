@@ -22,14 +22,31 @@ struct LiveSourceView: View {
                 } else {
                     List {
                         ForEach(store.channels) { channel in
-                            Button {
-                                active = channel
-                            } label: {
+                            HStack(spacing: 8) {
                                 channelRow(channel)
+
+                                Menu {
+                                    Button {
+                                        editing = channel
+                                    } label: {
+                                        Label("编辑", systemImage: "pencil")
+                                    }
+                                    Button(role: .destructive) {
+                                        store.delete(channel.id)
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .frame(width: 34, height: 34)
+                                }
                             }
-                            .buttonStyle(LiveRowStyle(accent: theme.accent))
+                            .contentShape(Rectangle())
+                            .onTapGesture { active = channel }
                             .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 12))
                             .listRowBackground(Color.clear)
                             .contextMenu {
                                 Button {
@@ -363,17 +380,5 @@ private struct LiveSourceForm: View {
                 importing = false
             }
         }
-    }
-}
-
-/// 直播列表入口点按反馈
-private struct LiveRowStyle: ButtonStyle {
-    let accent: Color
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }

@@ -16,7 +16,6 @@ struct SettingsView: View {
     private var entries: [Entry] {
         [
             Entry(title: "播放设置", caption: "自动隐藏、屏幕方向、断点续播、后台播放", icon: "play.circle", destination: PlaybackSettingsView()),
-            Entry(title: "网络直播", caption: "自定义直播源、m3u 频道列表，VLC 内核直接播", icon: "tv.fill", destination: LiveSourceView()),
             Entry(title: "视频设置", caption: "缩放模式、长宽比、解码方式、字幕大小", icon: "rectangle.on.rectangle", destination: VideoSettingsView()),
             Entry(title: "翻译设置", caption: "离线识别模型、翻译通道与接口", icon: "character.bubble", destination: TranslateSettingsView()),
             Entry(title: "主题外观", caption: "5 套配色，点一下立即生效", icon: "paintpalette", destination: ThemeSettingsView()),

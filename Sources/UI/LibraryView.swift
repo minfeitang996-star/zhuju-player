@@ -35,6 +35,7 @@ struct LibraryView: View {
     }
     @State private var showSettings = false
     @State private var showLive = false
+    @State private var showLiveSource = false
     @State private var selected: MediaItem?
     @State private var importErrors: String?
     @State private var showErrors = false
@@ -95,6 +96,14 @@ struct LibraryView: View {
                             unlocked.remove(FolderLock.relativePath(popped))
                         } label: {
                             Image(systemName: "chevron.left")
+                        }
+                    }
+                }
+                if path.isEmpty {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button { showLiveSource = true } label: {
+                            Image(systemName: "tv.fill")
+                                .foregroundColor(theme.accent)
                         }
                     }
                 }
@@ -162,6 +171,9 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showLive) {
                 LiveView()
+            }
+            .sheet(isPresented: $showLiveSource) {
+                LiveSourceView()
             }
             .sheet(item: $jobTarget, onDismiss: { library.reload() }) { target in
                 JobView(videoURL: target.url)
