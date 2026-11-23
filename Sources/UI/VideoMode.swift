@@ -76,17 +76,44 @@ final class VLCPlayerContainer: UIView {
 
     /// 递归把 VLC 后插进来的渲染子视图 / 子层全部撑满当前区域
     func fitDrawableSubviews() {
+        let scale = window?.screen?.scale ?? UIScreen.main.scale
         func fitView(_ v: UIView) {
             v.frame = inner.bounds
             v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            v.layer.contentsScale = scale
             for sub in v.subviews { fitView(sub) }
         }
         inner.subviews.forEach(fitView)
-        inner.layer.sublayers?.forEach { $0.frame = inner.bounds }
+        inner.layer.sublayers?.forEach {
+            $0.frame = inner.bounds
+            $0.contentsScale = scale
+        }
         // 个别版本把渲染层挂在容器层上而不是 inner 上，一并兜住
         layer.sublayers?.forEach {
-            if $0 !== inner.layer { $0.frame = bounds }
+            if $0 !== inner.layer {
+                $0.frame = bounds
+                $0.contentsScale = scale
+            }
         }
+    }
+
+    /// 把可见尺寸重新报给 VLC 的 GL 渲染层。
+    /// 只改渲染层 frame 不够：CAOpenGLLayer 只在自身 layoutSublayers 时按可见尺寸 × contentsScale
+    /// 上报输出尺寸；首帧前那次布局会被丢弃，之后不会自动重报，画面就停在旧/零尺寸（半幅、两端黑边）。
+    /// 这里逐层 setNeedsLayout + layoutIfNeeded，强制渲染层按当前可见尺寸重算输出表面。
+    func reportSizeToVideoOutput() {
+        let scale = window?.screen?.scale ?? UIScreen.main.scale
+        func walkLayer(_ layer: CALayer) {
+            layer.contentsScale = scale
+            layer.setNeedsLayout()
+            layer.layoutIfNeeded()
+            layer.sublayers?.forEach(walkLayer)
+        }
+        func walkView(_ v: UIView) {
+            walkLayer(v.layer)
+            v.subviews.forEach(walkView)
+        }
+        walkView(inner)
     }
 
     private func resolvedArea() -> CGRect {
@@ -157,5 +184,6 @@ struct VLCVideoView: UIViewRepresentable {
         uiView.setNeedsLayout()
         uiView.layoutIfNeeded()
         uiView.fitDrawableSubviews()
+        uiView.reportSizeToVideoOutput()
     }
 }
