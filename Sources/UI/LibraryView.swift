@@ -43,11 +43,7 @@ struct LibraryView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                LinearGradient(
-                    colors: [theme.background, theme.background.opacity(0.9)],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                backgroundLayer
 
                 if entries.isEmpty {
                     emptyState
@@ -211,14 +207,16 @@ struct LibraryView: View {
         library.entries(in: currentFolder)
     }
 
-    /// 搜索过滤 + 排序后的展示列表（文件夹始终在前）
-    private var filteredEntries: [LibraryEntry] {
-        let folderURLs = entries.compactMap { entry -> URL? in
+    /// 文件夹（始终排在前面，不参与搜索过滤）
+    private var folderEntries: [LibraryEntry] {
+        entries.compactMap { entry -> URL? in
             if case .folder(let url, _) = entry { return url }
             return nil
-        }
-        let folderEntries = folderURLs.map { LibraryEntry.folder($0, library.videoCount(in: $0)) }
+        }.map { LibraryEntry.folder($0, library.videoCount(in: $0)) }
+    }
 
+    /// 搜索过滤 + 排序后的视频
+    private var videoEntries: [MediaItem] {
         var videos = entries.compactMap { entry -> MediaItem? in
             if case .video(let item) = entry { return item }
             return nil
@@ -232,7 +230,12 @@ struct LibraryView: View {
         case "date": videos.sort { ($0.modifiedDate ?? .distantPast) > ($1.modifiedDate ?? .distantPast) }
         default: videos.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         }
-        return folderEntries + videos.map { LibraryEntry.video($0) }
+        return videos
+    }
+
+    /// 搜索过滤 + 排序后的展示列表（文件夹始终在前）
+    private var filteredEntries: [LibraryEntry] {
+        folderEntries + videoEntries.map { LibraryEntry.video($0) }
     }
 
     private var videosInCurrentFolder: [MediaItem] {
@@ -279,51 +282,81 @@ struct LibraryView: View {
         library.reload()
     }
 
+    // MARK: - 背景
+
+    private var backgroundLayer: some View {
+        ZStack {
+            LinearGradient(
+                colors: [theme.background.opacity(0.96), theme.background],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // 顶部一团柔和的主题色光晕，避免背景一块死色
+            Circle()
+                .fill(theme.accent.opacity(0.10))
+                .frame(width: 340, height: 340)
+                .blur(radius: 90)
+                .offset(x: 100, y: -170)
+                .ignoresSafeArea()
+        }
+    }
+
+    // MARK: - 列表
+
     private var list: some View {
         List {
             if path.isEmpty, let resume = resumeItem {
                 Button {
                     openVideo(resume)
                 } label: {
-                    resumeRow(resume)
+                    resumeHero(resume)
                 }
                 .buttonStyle(HomePressStyle(accent: theme.accent))
                 .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 .listRowBackground(Color.clear)
             }
 
-            ForEach(filteredEntries) { entry in
-                switch entry {
-                case .folder(let url, let count):
-                    Button {
-                        openFolder(url)
-                    } label: {
-                        folderRow(url, count: count)
-                    }
-                    .buttonStyle(HomePressStyle(accent: theme.accent))
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
-                    .listRowBackground(Color.clear)
-                    .contextMenu {
-                        if FolderLock.isLocked(url) {
-                            Button {
-                                unlockAndThen(url) { FolderLock.setLocked(url, false) }
-                            } label: {
-                                Label("解除加密", systemImage: "lock.open")
-                            }
-                        } else {
-                            Button {
-                                FolderLock.setLocked(url, true)
-                                // 加锁后这个会话里也立刻上锁，必须验证才能进去
-                                unlocked.remove(FolderLock.relativePath(url))
-                            } label: {
-                                Label("加密这个文件夹", systemImage: "lock.fill")
+            if !folderEntries.isEmpty {
+                sectionHeader("文件夹", count: folderEntries.count)
+
+                ForEach(folderEntries) { entry in
+                    if case .folder(let url, let count) = entry {
+                        Button {
+                            openFolder(url)
+                        } label: {
+                            folderCard(url, count: count)
+                        }
+                        .buttonStyle(HomePressStyle(accent: theme.accent))
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .contextMenu {
+                            if FolderLock.isLocked(url) {
+                                Button {
+                                    unlockAndThen(url) { FolderLock.setLocked(url, false) }
+                                } label: {
+                                    Label("解除加密", systemImage: "lock.open")
+                                }
+                            } else {
+                                Button {
+                                    FolderLock.setLocked(url, true)
+                                    // 加锁后这个会话里也立刻上锁，必须验证才能进去
+                                    unlocked.remove(FolderLock.relativePath(url))
+                                } label: {
+                                    Label("加密这个文件夹", systemImage: "lock.fill")
+                                }
                             }
                         }
                     }
+                }
+            }
 
-                case .video(let item):
+            if !videoEntries.isEmpty {
+                sectionHeader("视频", count: videoEntries.count)
+
+                ForEach(videoEntries) { item in
                     Button {
                         if selecting {
                             toggleSelection(item)
@@ -339,13 +372,13 @@ struct LibraryView: View {
                                                      ? theme.accent
                                                      : .white.opacity(0.35))
                             }
-                            row(item)
+                            videoCard(item)
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(HomePressStyle(accent: theme.accent))
                     .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowBackground(Color.clear)
                     .contextMenu {
                         if !selecting {
@@ -370,18 +403,6 @@ struct LibraryView: View {
                     }
                 }
             }
-            .onDelete { indexSet in
-                for index in indexSet {
-                    guard index < filteredEntries.count else { continue }
-                    switch filteredEntries[index] {
-                    case .video(let item):
-                        removeResume(for: item)
-                        library.delete(item)
-                    case .folder(let url, _):
-                        library.deleteFolder(url)
-                    }
-                }
-            }
         }
         .listStyle(.plain)
         .searchable(text: $searchText, prompt: "搜视频")
@@ -390,6 +411,24 @@ struct LibraryView: View {
         .safeAreaInset(edge: .bottom) {
             if selecting { selectionBar }
         }
+    }
+
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
+            Text("\(count)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.35))
+            Spacer()
+        }
+        .padding(.leading, 4)
+        .padding(.top, 16)
+        .padding(.bottom, 4)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowBackground(Color.clear)
     }
 
     private var selectionBar: some View {
@@ -435,22 +474,35 @@ struct LibraryView: View {
         .background(.ultraThinMaterial)
     }
 
-    private func folderRow(_ url: URL, count: Int) -> some View {
+    // MARK: - 卡片外观
+
+    private func cardBackground(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return shape
+            .fill(Color.white.opacity(0.07))
+            .overlay(shape.stroke(Color.white.opacity(0.10), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 3)
+    }
+
+    private func folderCard(_ url: URL, count: Int) -> some View {
         let locked = FolderLock.isLocked(url)
         return HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(theme.accent.opacity(0.15))
-                .frame(width: 46, height: 46)
-                .overlay(
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(theme.accent)
-                )
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    ))
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(theme.accent)
+            }
+            .frame(width: 54, height: 54)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(url.lastPathComponent)
-                        .font(.system(size: 15.5, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if locked {
@@ -460,26 +512,18 @@ struct LibraryView: View {
                     }
                 }
                 Text(locked ? "已加密 · \(BiometricAuth.biometryName)解锁" : "\(count) 个项目")
-                    .font(.system(size: 11.5))
+                    .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.45))
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.25))
+                .foregroundColor(.white.opacity(0.22))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.055))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -494,49 +538,57 @@ struct LibraryView: View {
         return item
     }
 
-    private func resumeRow(_ item: MediaItem) -> some View {
+    private func resumeHero(_ item: MediaItem) -> some View {
         let saved = UserDefaults.standard.double(forKey: "resume:\(item.url.lastPathComponent)")
         return HStack(spacing: 14) {
-            Circle()
-                .fill(theme.accent.opacity(0.2))
-                .frame(width: 48, height: 48)
-                .overlay(
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(theme.accent)
-                )
+            VideoThumbnail(url: item.url, width: 72, height: 56)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("继续播放 · \(Int(saved * 100))%")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .foregroundColor(theme.accent)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("继续播放")
+                    Text("· \(Int(saved * 100))%")
+                }
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(theme.accent)
+
                 Text(item.title)
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(.system(size: 15.5, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
             }
 
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.25))
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(16)
+        .padding(.bottom, 20)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [theme.accent.opacity(0.20), theme.accent.opacity(0.06)],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                )
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [theme.accent.opacity(0.22), theme.accent.opacity(0.07)],
+                    startPoint: .leading, endPoint: .trailing
+                ))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(theme.accent.opacity(0.22), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(theme.accent.opacity(0.25), lineWidth: 1)
         )
+        .overlay(alignment: .bottom) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 3)
+                    Capsule()
+                        .fill(theme.accent)
+                        .frame(width: max(4, proxy.size.width * saved), height: 3)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+            .frame(height: 20)
+        }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -549,15 +601,16 @@ struct LibraryView: View {
         return (saved > 0.02 && saved < 0.98) ? saved : nil
     }
 
-    private func row(_ item: MediaItem) -> some View {
-        HStack(spacing: 14) {
-            VideoThumbnail(url: item.url)
+    private func videoCard(_ item: MediaItem) -> some View {
+        HStack(spacing: 13) {
+            VideoThumbnail(url: item.url, width: 62, height: 46)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(item.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15.5, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
+
                 HStack(spacing: 8) {
                     Text(item.fileExtension.uppercased())
                     Text(item.sizeText)
@@ -579,10 +632,10 @@ struct LibraryView: View {
                             ZStack(alignment: .leading) {
                                 Capsule()
                                     .fill(Color.white.opacity(0.12))
-                                    .frame(width: 90, height: 4)
+                                    .frame(width: 84, height: 4)
                                 Capsule()
                                     .fill(theme.accent)
-                                    .frame(width: max(2, 90 * CGFloat(progressValue)), height: 4)
+                                    .frame(width: max(2, 84 * CGFloat(progressValue)), height: 4)
                             }
                             Text("看到 \(Int(progressValue * 100))%")
                                 .font(.system(size: 11, weight: .medium))
@@ -592,31 +645,24 @@ struct LibraryView: View {
                 }
             }
 
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.25))
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.055))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
+        .padding(14)
+        .cardBackground(cornerRadius: 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "film.stack")
-                .font(.system(size: 52, weight: .light))
-                .foregroundColor(.white.opacity(0.22))
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 104, height: 104)
+                Image(systemName: "film.stack")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundColor(.white.opacity(0.28))
+            }
             Text(path.isEmpty ? "还没有视频" : "这个文件夹是空的")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white.opacity(0.9))
@@ -747,13 +793,14 @@ struct LibraryView: View {
         }
     }
 }
+
 /// 主页入口点按：轻微缩放 + 透明度，带柔和回弹
 private struct HomePressStyle: ButtonStyle {
     let accent: Color
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }

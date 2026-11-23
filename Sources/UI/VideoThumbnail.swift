@@ -5,6 +5,8 @@ import AVFoundation
 struct VideoThumbnail: View {
 
     let url: URL
+    var width: CGFloat = 62
+    var height: CGFloat = 46
     @State private var image: UIImage?
 
     private static var cache: NSCache<NSString, UIImage> = {
@@ -28,7 +30,11 @@ struct VideoThumbnail: View {
                     .foregroundColor(.white.opacity(0.35))
             }
         }
-        .frame(width: 50, height: 50)
+        .frame(width: width, height: height)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
         .onAppear { load() }
     }
 
@@ -42,7 +48,7 @@ struct VideoThumbnail: View {
             let asset = AVURLAsset(url: url)
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 180, height: 180)
+            generator.maximumSize = CGSize(width: 240, height: 240)
             let candidates = [
                 CMTime(seconds: 0.5, preferredTimescale: 600),
                 CMTime(seconds: 1.0, preferredTimescale: 600),
