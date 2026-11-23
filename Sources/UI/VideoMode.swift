@@ -76,7 +76,7 @@ final class VLCPlayerContainer: UIView {
 
     /// 递归把 VLC 后插进来的渲染子视图 / 子层全部撑满当前区域
     func fitDrawableSubviews() {
-        let scale = window?.screen?.scale ?? UIScreen.main.scale
+        let scale = window?.screen.scale ?? UIScreen.main.scale
         func fitView(_ v: UIView) {
             v.frame = inner.bounds
             v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -102,7 +102,7 @@ final class VLCPlayerContainer: UIView {
     /// 上报输出尺寸；首帧前那次布局会被丢弃，之后不会自动重报，画面就停在旧/零尺寸（半幅、两端黑边）。
     /// 这里逐层 setNeedsLayout + layoutIfNeeded，强制渲染层按当前可见尺寸重算输出表面。
     func reportSizeToVideoOutput() {
-        let scale = window?.screen?.scale ?? UIScreen.main.scale
+        let scale = window?.screen.scale ?? UIScreen.main.scale
         func walkLayer(_ layer: CALayer) {
             layer.contentsScale = scale
             layer.setNeedsLayout()
