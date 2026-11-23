@@ -27,6 +27,8 @@ struct LibraryView: View {
     @State private var newFolderName = ""
     @State private var moveTarget: MediaItem?
     @State private var moveOptions: [URL] = []
+    @State private var searchText = ""
+    @AppStorage("librarySort") private var librarySort: String = "name"
 
     // 多选
     @State private var selecting = false
@@ -93,6 +95,13 @@ struct LibraryView: View {
                             }
                             .font(.system(size: 15))
                             .disabled(videosInCurrentFolder.isEmpty)
+                            Menu {
+                                Button("按名称") { librarySort = "name" }
+                                Button("按大小") { librarySort = "size" }
+                                Button("按日期") { librarySort = "date" }
+                            } label: {
+                                Image(systemName: "arrow.up.arrow.down")
+                            }
                             Menu {
                                 Button {
                                     showImporter = true
@@ -197,6 +206,30 @@ struct LibraryView: View {
         library.entries(in: currentFolder)
     }
 
+    /// 搜索过滤 + 排序后的展示列表（文件夹始终在前）
+    private var filteredEntries: [LibraryEntry] {
+        let folderURLs = entries.compactMap { entry -> URL? in
+            if case .folder(let url, _) = entry { return url }
+            return nil
+        }
+        let folderEntries = folderURLs.map { LibraryEntry.folder($0, library.videoCount(in: $0)) }
+
+        var videos = entries.compactMap { entry -> MediaItem? in
+            if case .video(let item) = entry { return item }
+            return nil
+        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            videos = videos.filter { $0.title.localizedCaseInsensitiveContains(query) }
+        }
+        switch librarySort {
+        case "size": videos.sort { $0.fileSize > $1.fileSize }
+        case "date": videos.sort { ($0.modifiedDate ?? .distantPast) > ($1.modifiedDate ?? .distantPast) }
+        default: videos.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }
+        return folderEntries + videos.map { LibraryEntry.video($0) }
+    }
+
     private var videosInCurrentFolder: [MediaItem] {
         entries.compactMap {
             if case .video(let item) = $0 { return item }
@@ -253,7 +286,7 @@ struct LibraryView: View {
                 .listRowBackground(theme.accent.opacity(0.16))
             }
 
-            ForEach(entries) { entry in
+            ForEach(filteredEntries) { entry in
                 switch entry {
                 case .folder(let url, let count):
                     Button {
@@ -330,8 +363,8 @@ struct LibraryView: View {
             }
             .onDelete { indexSet in
                 for index in indexSet {
-                    guard index < entries.count else { continue }
-                    switch entries[index] {
+                    guard index < filteredEntries.count else { continue }
+                    switch filteredEntries[index] {
                     case .video(let item):
                         removeResume(for: item)
                         library.delete(item)
@@ -342,6 +375,7 @@ struct LibraryView: View {
             }
         }
         .listStyle(.plain)
+        .searchable(text: $searchText, prompt: "搜视频")
         .scrollContentBackground(.hidden)
         .refreshable { library.reload() }
         .safeAreaInset(edge: .bottom) {

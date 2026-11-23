@@ -9,6 +9,7 @@ struct GestureSettingsView: View {
     @AppStorage("longPressSkip") private var longPressSkip: Bool = true
     @AppStorage("longPressSeconds") private var longPressSeconds: Double = 10
     @AppStorage("autoNext") private var autoNext: Bool = true
+    @AppStorage("scrubSeconds") private var scrubSeconds: Double = 240
 
     private let pressSeconds: [Double] = [10, 20, 30]
 
@@ -32,6 +33,19 @@ struct GestureSettingsView: View {
                 Text("手势")
             } footer: {
                 Text("左侧上下滑调亮度，右侧上下滑调音量（手机系统音量，跟侧边按键同步），左右横滑快进快退，双击画面播放/暂停，长按画面快进固定秒数。")
+            }
+
+            Section {
+                Picker("横滑一屏进度", selection: $scrubSeconds) {
+                    Text("2 分钟").tag(120.0)
+                    Text("4 分钟").tag(240.0)
+                    Text("6 分钟").tag(360.0)
+                    Text("10 分钟").tag(600.0)
+                }
+            } header: {
+                Text("横滑定位")
+            } footer: {
+                Text("左右滑满整个屏幕对应的跳转秒数；片长很长就调大，短片调小更好拖。")
             }
 
             Section {

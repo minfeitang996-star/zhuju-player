@@ -244,6 +244,9 @@ final class PlayerController: ObservableObject {
         let rawScale = UserDefaults.standard.object(forKey: "subScale") as? Double ?? 85
         let scale = Int(rawScale)
         media.addOption(":sub-text-scale=\(scale)")
+        if Prefs.subDelay != 0 {
+            media.addOption(":sub-delay=\(Int(Prefs.subDelay * 1000))")
+        }
 
         switch Prefs.hwDecode {
         case "hw":
@@ -489,7 +492,7 @@ struct PlayerScreen: View {
         let length = controller.lengthSeconds
         guard length > 1 else { hudText = scrubHUD(); return }
         // 横滑满一屏约 240 秒；轻滑更细腻，不会一滑就飞出去
-        let seconds = Double(dx / width) * 240.0
+        let seconds = Double(dx / width) * Prefs.scrubSeconds
         let target = min(max(0.2, scrubStart + seconds), length - 0.4)
         scrubTarget = target
 

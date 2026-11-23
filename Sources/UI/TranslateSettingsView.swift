@@ -20,6 +20,7 @@ struct TranslateSettingsView: View {
 
     @State private var testing = false
     @State private var testResult = ""
+    @State private var cacheCount = 0
 
     private let targets: [String] = [
         "简体中文", "繁体中文", "英语", "日语", "韩语", "俄语",
@@ -63,6 +64,24 @@ struct TranslateSettingsView: View {
                 Text("翻译")
             } footer: {
                 Text("两个开关各自独立：关「显示同传状态条」只隐藏「日语 → 简体中文 · 边看边译中 · 已识别 9 段」那一行；关「显示翻译字幕」只隐藏画面底部滚动的原文/译文。关掉只是不显示，识别和翻译仍在后台跑，再打开就恢复。免密钥通道这两年被陆续封停（MyMemory 每天额度很小、Google 需要代理），所以想长期稳定翻译，最好填 Azure（免费 200 万字符/月）或自配接口的 Key。译文都会存本地缓存，重复台词不再联网。")
+            }
+
+            Section {
+                HStack {
+                    Text("已缓存译文")
+                    Spacer()
+                    Text("\(cacheCount) 条").foregroundColor(.secondary)
+                }
+                Button(role: .destructive) {
+                    Task {
+                        await TranslationHub.shared.clearCache()
+                        cacheCount = 0
+                    }
+                } label: {
+                    Label("清空翻译缓存", systemImage: "trash")
+                }
+            } footer: {
+                Text("缓存只存在本机，清掉后下次遇到同样台词要重新联网翻译。")
             }
 
             Section {
@@ -177,6 +196,9 @@ struct TranslateSettingsView: View {
         }
         .navigationTitle("翻译设置")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            Task { cacheCount = await TranslationHub.shared.cacheCount() }
+        }
     }
 
     private func download(_ id: String) {

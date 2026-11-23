@@ -56,12 +56,20 @@ struct MediaItem: Identifiable, Equatable {
 
     var hasSubtitle: Bool { subtitleURL != nil }
 
-    var sizeText: String {
+    var fileSize: Int64 {
         let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
-        let size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
-        let gb = Double(size) / 1_073_741_824
+        return (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    var modifiedDate: Date? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return attrs?[.modificationDate] as? Date
+    }
+
+    var sizeText: String {
+        let gb = Double(fileSize) / 1_073_741_824
         if gb >= 1 { return String(format: "%.1f GB", gb) }
-        return String(format: "%.0f MB", Double(size) / 1_048_576)
+        return String(format: "%.0f MB", Double(fileSize) / 1_048_576)
     }
 }
 

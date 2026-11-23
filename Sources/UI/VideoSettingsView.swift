@@ -8,6 +8,7 @@ struct VideoSettingsView: View {
     @AppStorage("hwDecode") private var hwDecode: String = "auto"
     @AppStorage("deinterlace") private var deinterlace: Bool = false
     @AppStorage("subScale") private var subScale: Double = 110
+    @AppStorage("subDelay") private var subDelay: Double = 0
 
     var body: some View {
         Form {
@@ -58,10 +59,17 @@ struct VideoSettingsView: View {
                     Text("\(Int(subScale))%").foregroundColor(.secondary)
                 }
                 Slider(value: $subScale, in: 70...200, step: 5)
+                HStack {
+                    Text("字幕延时")
+                    Spacer()
+                    Text(subDelay >= 0 ? "+\(String(format: "%.1f", subDelay)) 秒" : "\(String(format: "%.1f", subDelay)) 秒")
+                        .foregroundColor(.secondary)
+                }
+                Slider(value: $subDelay, in: -5...5, step: 0.5)
             } header: {
                 Text("字幕")
             } footer: {
-                Text("下一次打开视频生效。")
+                Text("字幕对不上口型时挪：正数字幕往后延，负数提前。下一次打开视频生效。")
             }
         }
         .navigationTitle("视频")

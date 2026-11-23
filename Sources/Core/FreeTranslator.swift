@@ -87,6 +87,17 @@ actor TranslationHub {
     func currentEngine() -> String { lastEngine }
     func currentError() -> String { lastErrorText }
 
+    func cacheCount() -> Int {
+        loadCacheIfNeeded()
+        return cache.count
+    }
+
+    func clearCache() {
+        cache.removeAll()
+        cacheLoaded = true
+        try? FileManager.default.removeItem(at: cacheURL)
+    }
+
     /// 在线免密钥通道这两年陆续失效，连续失败后整体熔断，避免拖住识别/生成字幕
     private var failStreak = 0
     private var disabledUntil = Date.distantPast

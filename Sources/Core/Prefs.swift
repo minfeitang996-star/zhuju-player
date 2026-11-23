@@ -43,6 +43,13 @@ enum Prefs {
         let clamped = max(0, min(360, value))
         UserDefaults.standard.set(Double(clamped), forKey: "liveSubManualPad")
     }
+    /// 外挂字幕延时（秒，正数字幕往后，负数往前）
+    static var subDelay: Double { UserDefaults.standard.object(forKey: "subDelay") as? Double ?? 0 }
+    /// 横滑满一屏对应的秒数
+    static var scrubSeconds: Double { UserDefaults.standard.object(forKey: "scrubSeconds") as? Double ?? 240 }
+    /// 片库排序：name / size / date
+    static var librarySort: String { UserDefaults.standard.string(forKey: "librarySort") ?? "name" }
+
     static var liveSubSize: CGFloat {
         switch liveSubLevel {
         case "large": return 21
