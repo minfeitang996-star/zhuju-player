@@ -15,6 +15,7 @@ struct LiveSourceView: View {
     @State private var selecting = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var showBatchDelete = false
+    @State private var searchText = ""
 
     /// 按分类分组：央视、卫视排前面，其他地区按名称排，其他兜底放最后
     private var grouped: [FolderGroup] {
@@ -41,6 +42,17 @@ struct LiveSourceView: View {
         return grouped.first(where: { $0.name == folder })?.items ?? []
     }
 
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var filteredChannels: [LiveChannel] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return store.channels
+            .filter { $0.name.localizedCaseInsensitiveContains(q) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     private var allSelected: Bool {
         !currentItems.isEmpty && selectedIDs.count == currentItems.count
     }
@@ -52,6 +64,8 @@ struct LiveSourceView: View {
 
                 if store.channels.isEmpty {
                     emptyState
+                } else if isSearching {
+                    searchList
                 } else if currentFolder == nil {
                     folderList
                 } else {
@@ -60,6 +74,7 @@ struct LiveSourceView: View {
             }
             .navigationTitle(currentFolder ?? "网络直播")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "搜索频道")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if currentFolder == nil {
@@ -192,6 +207,24 @@ struct LiveSourceView: View {
         .safeAreaInset(edge: .bottom) {
             if selecting { selectionBar }
         }
+    }
+
+    private var searchList: some View {
+        List {
+            if filteredChannels.isEmpty {
+                Text("没找到匹配「\(searchText)」的频道")
+                    .foregroundColor(.white.opacity(0.45))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            } else {
+                ForEach(filteredChannels) { channel in
+                    channelRowView(channel)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     private func channelRowView(_ channel: LiveChannel) -> some View {
