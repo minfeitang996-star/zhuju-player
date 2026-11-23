@@ -89,6 +89,8 @@ struct LiveStreamPlayer: View {
     @StateObject private var controller = LivePlayerController()
     @State private var showControls = true
     @State private var sourceIndex = 0
+    @State private var liveMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "liveVideoMode") ?? "fill") ?? .fill
+    @State private var liveSafeArea: Bool = UserDefaults.standard.object(forKey: "liveVideoSafeArea") as? Bool ?? false
 
     private var currentSource: LiveSource? {
         guard channel.sources.indices.contains(sourceIndex) else { return nil }
@@ -99,7 +101,7 @@ struct LiveStreamPlayer: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VLCVideoView(player: controller.player, mode: .fill, safeArea: false, aspect: nil)
+            VLCVideoView(player: controller.player, mode: liveMode, safeArea: liveSafeArea, aspect: nil)
 
             if controller.loading {
                 loadingOverlay
@@ -232,6 +234,23 @@ struct LiveStreamPlayer: View {
                     .background(Color.black.opacity(0.45))
                     .clipShape(Capsule())
                 }
+
+                Menu {
+                    aspectButton(.fit, safeArea: false, title: "适合")
+                    aspectButton(.fill, safeArea: false, title: "填充")
+                    aspectButton(.stretch, safeArea: false, title: "拉伸")
+                    Divider()
+                    aspectButton(.fit, safeArea: true, title: "适合 · 避开安全区")
+                    aspectButton(.fill, safeArea: true, title: "填充 · 避开安全区")
+                    aspectButton(.stretch, safeArea: true, title: "拉伸 · 避开安全区")
+                } label: {
+                    Image(systemName: "aspectratio")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 38, height: 38)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Circle())
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -257,6 +276,21 @@ struct LiveStreamPlayer: View {
     private var currentSourceLabel: String? {
         guard !channel.sources.isEmpty else { return nil }
         return "线路 \(sourceIndex + 1)/\(channel.sources.count)"
+    }
+
+    private func aspectButton(_ mode: VideoMode, safeArea: Bool, title: String) -> some View {
+        Button {
+            selectAspect(mode, safeArea)
+        } label: {
+            Label(title, systemImage: liveMode == mode && liveSafeArea == safeArea ? "checkmark" : "dot")
+        }
+    }
+
+    private func selectAspect(_ mode: VideoMode, _ safe: Bool) {
+        liveMode = mode
+        liveSafeArea = safe
+        UserDefaults.standard.set(mode.rawValue, forKey: "liveVideoMode")
+        UserDefaults.standard.set(safe, forKey: "liveVideoSafeArea")
     }
 
     private func selectSource(_ index: Int) {

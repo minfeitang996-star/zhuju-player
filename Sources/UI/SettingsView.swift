@@ -6,6 +6,13 @@ struct SettingsView: View {
     @AppStorage("themeID") private var themeID: String = "gold"
     private var theme: AppTheme { AppTheme.current(themeID) }
 
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return short + "（\(build)）"
+    }
+
     private struct Entry {
         let title: String
         let caption: String
@@ -31,6 +38,8 @@ struct SettingsView: View {
                     entriesCard
 
                     summaryCard
+
+                    aboutCard
 
                     notesSection
                 }
@@ -128,6 +137,44 @@ struct SettingsView: View {
             .padding(16)
             .background(Color.white.opacity(0.04))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var aboutCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("关于")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
+                .padding(.leading, 4)
+
+            HStack(spacing: 15) {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(theme.accent.opacity(0.16))
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(theme.accent.opacity(0.28), lineWidth: 1)
+                    )
+                    .overlay(
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundColor(theme.accent)
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("糖敏飞视频播放器")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("版本 \(appVersion)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
     }
 
     private var notesSection: some View {
