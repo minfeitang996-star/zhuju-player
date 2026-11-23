@@ -33,7 +33,7 @@ struct VideoThumbnail: View {
                     .foregroundColor(.white.opacity(0.35))
             }
         }
-        .frame(idealWidth: width, maxWidth: width, idealHeight: height, maxHeight: height)
+        .modifier(ThumbnailFrame(width: width, height: height))
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(Color.white.opacity(0.10), lineWidth: 1)
@@ -65,6 +65,19 @@ struct VideoThumbnail: View {
                     return
                 }
             }
+        }
+    }
+}
+
+private struct ThumbnailFrame: ViewModifier {
+    let width: CGFloat?
+    let height: CGFloat
+
+    func body(content: Content) -> some View {
+        if let width {
+            content.frame(width: width, height: height)
+        } else {
+            content.frame(maxWidth: .infinity, idealHeight: height, maxHeight: height)
         }
     }
 }

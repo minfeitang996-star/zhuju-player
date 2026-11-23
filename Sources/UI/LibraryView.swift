@@ -1072,19 +1072,20 @@ private struct VideoMetaLabel: View {
     }
 }
 
-/// 封面墙网格卡片：统一宽度与封面高度，首帧封面 + 收藏星标 + 分辨率/时长角标
+/// 封面墙网格卡片：统一宽度与封面高度，封面内缩留边，标题固定两行，首帧封面 + 收藏星标 + 分辨率/时长角标
 private struct GridVideoCard: View {
     let item: MediaItem
     let theme: AppTheme
     let isFav: Bool
     @ObservedObject private var store = VideoMetaStore.shared
 
+    private let coverHeight: CGFloat = 150
     private var meta: VideoMeta? { store.cache[item.url.path] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
-                VideoThumbnail(url: item.url, width: nil, height: 158, cornerRadius: 18)
+                VideoThumbnail(url: item.url, width: nil, height: coverHeight, cornerRadius: 14)
                 if isFav {
                     Image(systemName: "star.fill")
                         .font(.system(size: 12, weight: .semibold))
@@ -1117,23 +1118,20 @@ private struct GridVideoCard: View {
                         .padding(8)
                 }
             }
+            .padding(10)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(item.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(2)
-                HStack(spacing: 6) {
-                    Text(item.sizeText)
-                    if let duration = meta?.duration {
-                        Text(VideoMetaStore.durationText(duration))
-                    }
-                }
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.45))
+                    .frame(minHeight: 34, alignment: .topLeading)
+                Text(item.sizeText)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.45))
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(

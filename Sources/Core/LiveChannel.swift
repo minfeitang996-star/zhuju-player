@@ -7,6 +7,20 @@ struct LiveChannel: Identifiable, Codable, Equatable {
     var name: String
     var url: String
     var group: String?
+
+    /// 分类分组：优先用 m3u 带过来的分组标题，没有就按名称推断央视 / 卫视 / 其他
+    var category: String {
+        if let group, !group.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return group.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let n = name
+        if n.localizedCaseInsensitiveContains("CCTV")
+            || n.contains("央视") || n.contains("中央电视台") {
+            return "央视"
+        }
+        if n.contains("卫视") { return "卫视" }
+        return "其他"
+    }
 }
 
 /// 直播源清单：本地存 UserDefaults，不联网刮削
@@ -61,6 +75,11 @@ final class LiveSourceStore: ObservableObject {
 
     func delete(_ id: UUID) {
         channels.removeAll { $0.id == id }
+        save()
+    }
+
+    func delete(_ ids: Set<UUID>) {
+        channels.removeAll { ids.contains($0.id) }
         save()
     }
 

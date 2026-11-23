@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 网络直播源管理：手动添加单条流地址，或粘贴 m3u / m3u8 列表一次性导入
+/// 网络直播源管理：按分类分节展示，手动添加单条流地址，或粘贴 m3u / m3u8 列表一次性导入；支持逐条与批量删除
 struct LiveSourceView: View {
 
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +11,31 @@ struct LiveSourceView: View {
     @State private var showAdd = false
     @State private var editing: LiveChannel?
     @State private var active: LiveChannel?
+    @State private var selecting = false
+    @State private var selectedIDs: Set<UUID> = []
+    @State private var showBatchDelete = false
+
+    /// 按分类分组：央视、卫视排前面，其余按名称归类
+    private var grouped: [(category: String, items: [LiveChannel])] {
+        let dict = Dictionary(grouping: store.channels) { $0.category }
+        let preferred = ["央视", "卫视"]
+        let keys = dict.keys.sorted { a, b in
+            let ia = preferred.firstIndex(of: a) ?? 99
+            let ib = preferred.firstIndex(of: b) ?? 99
+            if ia != ib { return ia < ib }
+            return a.localizedStandardCompare(b) == .orderedAscending
+        }
+        return keys.map { category in
+            let items = (dict[category] ?? []).sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+            return (category, items)
+        }
+    }
+
+    private var allSelected: Bool {
+        !store.channels.isEmpty && selectedIDs.count == store.channels.count
+    }
 
     var body: some View {
         NavigationView {
@@ -20,57 +45,7 @@ struct LiveSourceView: View {
                 if store.channels.isEmpty {
                     emptyState
                 } else {
-                    List {
-                        ForEach(store.channels) { channel in
-                            HStack(spacing: 8) {
-                                channelRow(channel)
-
-                                Menu {
-                                    Button {
-                                        editing = channel
-                                    } label: {
-                                        Label("编辑", systemImage: "pencil")
-                                    }
-                                    Button(role: .destructive) {
-                                        store.delete(channel.id)
-                                    } label: {
-                                        Label("删除", systemImage: "trash")
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis.circle")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.white.opacity(0.4))
-                                        .frame(width: 34, height: 34)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { active = channel }
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 12))
-                            .listRowBackground(Color.clear)
-                            .contextMenu {
-                                Button {
-                                    editing = channel
-                                } label: {
-                                    Label("编辑", systemImage: "pencil")
-                                }
-                                Button(role: .destructive) {
-                                    store.delete(channel.id)
-                                } label: {
-                                    Label("删除", systemImage: "trash")
-                                }
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    store.delete(channel.id)
-                                } label: {
-                                    Label("删除", systemImage: "trash")
-                                }
-                            }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                    channelList
                 }
             }
             .navigationTitle("网络直播")
@@ -81,10 +56,25 @@ struct LiveSourceView: View {
                         .foregroundColor(theme.accent)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showAdd = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
+                    HStack(spacing: 16) {
+                        if selecting {
+                            Button("完成") {
+                                selecting = false
+                                selectedIDs.removeAll()
+                            }
+                            .font(.system(size: 15, weight: .semibold))
+                        } else {
+                            Button {
+                                selecting = true
+                            } label: {
+                                Image(systemName: "checkmark.circle")
+                            }
+                            Button {
+                                showAdd = true
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                            }
+                        }
                     }
                 }
             }
@@ -97,9 +87,158 @@ struct LiveSourceView: View {
             .fullScreenCover(item: $active) { channel in
                 LiveStreamPlayer(channel: channel)
             }
+            .alert("删除选中的 \(selectedIDs.count) 个频道？", isPresented: $showBatchDelete) {
+                Button("取消", role: .cancel) { }
+                Button("删除", role: .destructive) { batchDelete() }
+            } message: {
+                Text("删掉的直播源不能恢复，需要重新添加。")
+            }
         }
         .navigationViewStyle(.stack)
         .tint(theme.accent)
+    }
+
+    private var channelList: some View {
+        List {
+            ForEach(grouped, id: \.category) { group in
+                Section {
+                    ForEach(group.items) { channel in
+                        channelRowView(channel)
+                    }
+                } header: {
+                    HStack(spacing: 8) {
+                        Text(group.category)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text("\(group.items.count)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.35))
+                        Spacer()
+                    }
+                    .padding(.leading, 4)
+                    .textCase(nil)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .bottom) {
+            if selecting { selectionBar }
+        }
+    }
+
+    private func channelRowView(_ channel: LiveChannel) -> some View {
+        HStack(spacing: 8) {
+            if selecting {
+                Image(systemName: selectedIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 21))
+                    .foregroundColor(selectedIDs.contains(channel.id)
+                                     ? theme.accent
+                                     : .white.opacity(0.35))
+            }
+
+            channelRow(channel)
+
+            if !selecting {
+                Menu {
+                    Button {
+                        editing = channel
+                    } label: {
+                        Label("编辑", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        store.delete(channel.id)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white.opacity(0.4))
+                        .frame(width: 34, height: 34)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if selecting {
+                toggle(channel.id)
+            } else {
+                active = channel
+            }
+        }
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 12))
+        .listRowBackground(Color.clear)
+        .contextMenu {
+            if !selecting {
+                Button {
+                    editing = channel
+                } label: {
+                    Label("编辑", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    store.delete(channel.id)
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if !selecting {
+                Button(role: .destructive) {
+                    store.delete(channel.id)
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func toggle(_ id: UUID) {
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
+    }
+
+    private func batchDelete() {
+        store.delete(selectedIDs)
+        selectedIDs.removeAll()
+        selecting = false
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 12) {
+            Button(allSelected ? "取消全选" : "全选") {
+                if allSelected {
+                    selectedIDs.removeAll()
+                } else {
+                    selectedIDs = Set(store.channels.map { $0.id })
+                }
+            }
+            .font(.system(size: 14, weight: .medium))
+
+            Spacer()
+
+            Text("已选 \(selectedIDs.count) 个")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button(role: .destructive) {
+                showBatchDelete = true
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+            .font(.system(size: 14, weight: .medium))
+            .disabled(selectedIDs.isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
     }
 
     private func channelRow(_ channel: LiveChannel) -> some View {
@@ -331,7 +470,7 @@ private struct LiveSourceForm: View {
                     .foregroundColor(.red)
             }
 
-            Text("支持标准 #EXTINF 格式，分组标题会一并保留；导入后可在列表里逐条删除或编辑。")
+            Text("支持标准 #EXTINF 格式，分组标题会一并保留；导入后可在列表里分节查看，支持单选或批量删除。")
                 .font(.system(size: 11.5))
                 .lineSpacing(4)
                 .foregroundColor(.white.opacity(0.4))
