@@ -69,8 +69,10 @@ struct VideoThumbnail: View {
             for time in candidates {
                 if let cg = try? generator.copyCGImage(at: time, actualTime: nil) {
                     let ui = UIImage(cgImage: cg)
-                    Self.cache.setObject(ui, forKey: key)
-                    await MainActor.run { image = ui }
+                    await MainActor.run {
+                        Self.cache.setObject(ui, forKey: key)
+                        image = ui
+                    }
                     return
                 }
             }
