@@ -55,7 +55,8 @@ struct VideoThumbnail: View {
             image = hit
             return
         }
-        Task {
+        // 抽帧放到后台线程，避免一进文件夹几十条缩略图一起在主线程同步解码把界面卡死
+        Task.detached(priority: .userInitiated) {
             let asset = AVURLAsset(url: url)
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true

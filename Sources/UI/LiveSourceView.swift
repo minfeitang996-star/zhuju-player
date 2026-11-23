@@ -195,47 +195,48 @@ struct LiveSourceView: View {
     }
 
     private func channelRowView(_ channel: LiveChannel) -> some View {
-        Button {
+        HStack(spacing: 8) {
             if selecting {
-                toggle(channel.id)
-            } else {
-                active = channel
+                Image(systemName: selectedIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 21))
+                    .foregroundColor(selectedIDs.contains(channel.id)
+                                     ? theme.accent
+                                     : .white.opacity(0.35))
             }
-        } label: {
-            HStack(spacing: 8) {
+
+            Button {
                 if selecting {
-                    Image(systemName: selectedIDs.contains(channel.id) ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 21))
-                        .foregroundColor(selectedIDs.contains(channel.id)
-                                         ? theme.accent
-                                         : .white.opacity(0.35))
+                    toggle(channel.id)
+                } else {
+                    active = channel
                 }
-
+            } label: {
                 channelRow(channel)
+            }
+            .buttonStyle(HomeFolderStyle(accent: theme.accent))
+            .frame(maxWidth: .infinity)
 
-                if !selecting {
-                    Menu {
-                        Button {
-                            editing = channel
-                        } label: {
-                            Label("编辑", systemImage: "pencil")
-                        }
-                        Button(role: .destructive) {
-                            store.delete(channel.id)
-                        } label: {
-                            Label("删除", systemImage: "trash")
-                        }
+            if !selecting {
+                Menu {
+                    Button {
+                        editing = channel
                     } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 18))
-                            .foregroundColor(.white.opacity(0.4))
-                            .frame(width: 34, height: 34)
+                        Label("编辑", systemImage: "pencil")
                     }
+                    Button(role: .destructive) {
+                        store.delete(channel.id)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white.opacity(0.4))
+                        .frame(width: 34, height: 34)
                 }
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(HomeFolderStyle(accent: theme.accent))
+        .contentShape(Rectangle())
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 12))
         .listRowBackground(Color.clear)

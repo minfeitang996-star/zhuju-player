@@ -614,6 +614,7 @@ struct LibraryView: View {
             GridVideoCard(item: item, theme: theme, isFav: isFav(item))
         }
         .buttonStyle(HomePressStyle(accent: theme.accent))
+        .frame(maxWidth: .infinity)
         .contextMenu { videoContextMenu(item) }
     }
 
