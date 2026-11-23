@@ -523,7 +523,7 @@ struct LibraryView: View {
                 .foregroundColor(.white.opacity(0.22))
         }
         .padding(14)
-        .cardBackground(cornerRadius: 20)
+        .background(cardBackground(cornerRadius: 20))
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -648,7 +648,7 @@ struct LibraryView: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .cardBackground(cornerRadius: 20)
+        .background(cardBackground(cornerRadius: 20))
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
