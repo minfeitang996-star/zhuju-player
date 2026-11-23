@@ -1,12 +1,14 @@
 import SwiftUI
 import AVFoundation
 
-/// 列表视频首帧缩略图：异步生成，结果按文件名做内存缓存；生成失败回退默认图标。
+/// 列表/网格视频首帧缩略图：异步生成，结果按文件名做内存缓存；生成失败回退默认图标。
+/// width 传 nil 时按可用宽度铺满（网格封面墙用），高度固定。
 struct VideoThumbnail: View {
 
     let url: URL
     var width: CGFloat? = 62
     var height: CGFloat = 46
+    var cornerRadius: CGFloat = 12
     @State private var image: UIImage?
 
     private static var cache: NSCache<NSString, UIImage> = {
@@ -17,23 +19,24 @@ struct VideoThumbnail: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color.white.opacity(0.08))
             if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
             } else {
                 Image(systemName: "play.rectangle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(.white.opacity(0.35))
             }
         }
-        .frame(width: width, height: height)
+        .frame(idealWidth: width, maxWidth: width, idealHeight: height, maxHeight: height)
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
         )
         .onAppear { load() }
     }
@@ -48,7 +51,7 @@ struct VideoThumbnail: View {
             let asset = AVURLAsset(url: url)
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 240, height: 240)
+            generator.maximumSize = CGSize(width: 480, height: 480)
             let candidates = [
                 CMTime(seconds: 0.5, preferredTimescale: 600),
                 CMTime(seconds: 1.0, preferredTimescale: 600),

@@ -129,6 +129,7 @@ struct LibraryView: View {
                                 viewMode = viewMode == "list" ? "grid" : "list"
                             } label: {
                                 Image(systemName: viewMode == "list" ? "square.grid.2x2" : "list.bullet")
+                                    .foregroundColor(viewMode == "grid" ? theme.accent : .primary)
                             }
                             Menu {
                                 Button("按名称") { librarySort = "name" }
@@ -701,9 +702,9 @@ struct LibraryView: View {
     private func cardBackground(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return shape
-            .fill(Color.white.opacity(0.07))
-            .overlay(shape.stroke(Color.white.opacity(0.10), lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 3)
+            .fill(Color.white.opacity(0.08))
+            .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 5)
     }
 
     private func folderCard(_ url: URL, count: Int) -> some View {
@@ -1059,7 +1060,7 @@ private struct VideoMetaLabel: View {
     }
 }
 
-/// 封面墙网格卡片：首帧封面 + 收藏星标 + 分辨率角标 + 标题与大小时长
+/// 封面墙网格卡片：统一宽度与封面高度，首帧封面 + 收藏星标 + 分辨率/时长角标
 private struct GridVideoCard: View {
     let item: MediaItem
     let theme: AppTheme
@@ -1069,14 +1070,14 @@ private struct GridVideoCard: View {
     private var meta: VideoMeta? { store.cache[item.url.path] }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
-                VideoThumbnail(url: item.url, width: nil, height: 150)
+                VideoThumbnail(url: item.url, width: nil, height: 158, cornerRadius: 18)
                 if isFav {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 12))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.accent)
-                        .padding(8)
+                        .padding(9)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -1085,15 +1086,27 @@ private struct GridVideoCard: View {
                     Text(resolution)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Color.black.opacity(0.55))
                         .clipShape(Capsule())
-                        .padding(7)
+                        .padding(8)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if let duration = meta?.duration {
+                    Text(VideoMetaStore.durationText(duration))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.55))
+                        .clipShape(Capsule())
+                        .padding(8)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
@@ -1107,7 +1120,19 @@ private struct GridVideoCard: View {
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.45))
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 5)
         .onAppear { store.load(item.url) }
     }
 }
