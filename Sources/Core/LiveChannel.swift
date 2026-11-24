@@ -395,7 +395,7 @@ enum M3UParser {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 let rawName = String(line[..<comma])
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                if Self.isValidURL(rawURL) {
+                if LiveSourceStore.isValidURL(rawURL) {
                     result.append(Entry(name: rawName.isEmpty ? rawURL : rawName,
                                         url: rawURL, group: pendingGroup))
                 }
