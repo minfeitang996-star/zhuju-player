@@ -331,7 +331,7 @@ final class LiveSourceStore: ObservableObject {
     func deletePlaylists(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
         playlists.removeAll { ids.contains($0.id) }
-        if let activePlaylistID, !playlists.contains(where: { $0.id == activePlaylistID }) {
+        if let current = activePlaylistID, !playlists.contains(where: { $0.id == current }) {
             activePlaylistID = playlists.first?.id
             saveActive()
         }
