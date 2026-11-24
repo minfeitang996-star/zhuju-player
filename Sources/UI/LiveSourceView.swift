@@ -732,8 +732,8 @@ private struct ChannelForm: View {
     }
 
     let mode: FormMode
-    let targetPlaylistID: UUID?
-    let existing: LiveChannel?
+    let targetPlaylistID: UUID? = nil
+    let existing: LiveChannel? = nil
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = LiveSourceStore.shared
