@@ -57,7 +57,7 @@ struct VodDetail: Equatable {
 
 /// 历史 / 收藏快照：不依赖源是否还在，删掉源后仍可回看
 struct VodHistoryItem: Identifiable, Codable, Equatable {
-    let id: UUID
+    var id: UUID
     var name: String
     var pic: String?
     var url: String
