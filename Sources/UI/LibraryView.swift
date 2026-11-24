@@ -110,61 +110,36 @@ struct LibraryView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
-                        if selecting {
-                            Button("完成") {
-                                selecting = false
-                                selectedIDs.removeAll()
-                            }
-                            .font(.system(size: 15, weight: .semibold))
-                        } else {
-                            if !path.isEmpty {
-                                Button {
-                                    toggleLockForCurrentFolder()
-                                } label: {
-                                    Image(systemName: FolderLock.isLocked(currentFolder) ? "lock.fill" : "lock.open")
-                                        .foregroundColor(FolderLock.isLocked(currentFolder)
-                                                         ? theme.accent
-                                                         : .primary)
-                                }
-                            }
-                            Button { showVod = true } label: {
-                                Image(systemName: "play.tv.fill")
-                            }
-                            Button { showLive = true } label: {
-                                Image(systemName: "waveform")
-                            }
-                            Button("选择") {
-                                selecting = true
-                            }
-                            .font(.system(size: 15))
-                            .disabled(videosInCurrentFolder.isEmpty)
+                        if !path.isEmpty {
                             Button {
-                                viewMode = viewMode == "list" ? "grid" : "list"
+                                toggleLockForCurrentFolder()
                             } label: {
-                                Image(systemName: viewMode == "list" ? "square.grid.2x2" : "list.bullet")
+                                Image(systemName: FolderLock.isLocked(currentFolder) ? "lock.fill" : "lock.open")
+                                    .foregroundColor(FolderLock.isLocked(currentFolder)
+                                                     ? theme.accent
+                                                     : .primary)
                             }
-                            Menu {
-                                Button("按名称") { librarySort = "name" }
-                                Button("按大小") { librarySort = "size" }
-                                Button("按日期") { librarySort = "date" }
+                        }
+                        Button { showVod = true } label: {
+                            Image(systemName: "play.tv.fill")
+                        }
+                        Button { showLive = true } label: {
+                            Image(systemName: "waveform")
+                        }
+                        Menu {
+                            Button {
+                                showImporter = true
                             } label: {
-                                Image(systemName: "arrow.up.arrow.down")
+                                Label("导入视频", systemImage: "square.and.arrow.down")
                             }
-                            Menu {
-                                Button {
-                                    showImporter = true
-                                } label: {
-                                    Label("导入视频", systemImage: "square.and.arrow.down")
-                                }
-                                Button {
-                                    newFolderName = ""
-                                    showNewFolder = true
-                                } label: {
-                                    Label("新建文件夹", systemImage: "folder.badge.plus")
-                                }
+                            Button {
+                                newFolderName = ""
+                                showNewFolder = true
                             } label: {
-                                Image(systemName: "plus.circle.fill")
+                                Label("新建文件夹", systemImage: "folder.badge.plus")
                             }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
                         }
                     }
                 }
@@ -506,6 +481,8 @@ struct LibraryView: View {
             if !videoEntries.isEmpty {
                 filterChips
 
+                libraryToolbar
+
                 sectionHeader("视频", count: filteredVideos.count, trailing: videoTotalSizeText)
 
                 if filteredVideos.isEmpty {
@@ -552,6 +529,47 @@ struct LibraryView: View {
         }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowBackground(Color.clear)
+    }
+
+    /// 本地列表操作工具条：多选、视图切换、排序（从顶部导航栏下沉到这里）
+    private var libraryToolbar: some View {
+        HStack(spacing: 16) {
+            if selecting {
+                Button("完成") {
+                    selecting = false
+                    selectedIDs.removeAll()
+                }
+                .font(.system(size: 14, weight: .semibold))
+            } else {
+                Button {
+                    selecting = true
+                } label: {
+                    Label("选择", systemImage: "checkmark.circle")
+                }
+                .font(.system(size: 14))
+                .disabled(videosInCurrentFolder.isEmpty)
+            }
+
+            Spacer()
+
+            Button {
+                viewMode = viewMode == "list" ? "grid" : "list"
+            } label: {
+                Image(systemName: viewMode == "list" ? "square.grid.2x2" : "list.bullet")
+            }
+
+            Menu {
+                Button("按名称") { librarySort = "name" }
+                Button("按大小") { librarySort = "size" }
+                Button("按日期") { librarySort = "date" }
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+            }
+        }
+        .foregroundColor(.white.opacity(0.75))
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
         .listRowBackground(Color.clear)
     }
 
