@@ -1,0 +1,265 @@
+import SwiftUI
+
+/// 影片详情：简介 + 线路 + 剧集网格，选集进播放
+struct VodDetailView: View {
+
+    let item: VodItem
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = VodStore.shared
+    @AppStorage("themeID") private var themeID: String = "gold"
+    private var theme: AppTheme { AppTheme.current(themeID) }
+
+    @State private var detail: VodDetail?
+    @State private var loading = true
+    @State private var errorText: String?
+    @State private var lineIndex = 0
+    @State private var playTarget: VodPlayTarget?
+
+    private var siteName: String { store.activeSite?.name ?? "点播" }
+    private var currentLine: VodLine? {
+        guard let detail, detail.lines.indices.contains(lineIndex) else { return nil }
+        return detail.lines[lineIndex]
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                theme.background.ignoresSafeArea()
+
+                if loading {
+                    ProgressView().tint(theme.accent)
+                } else if let errorText {
+                    errorView(errorText)
+                } else if let detail {
+                    content(detail)
+                } else {
+                    Text("没有拿到详情")
+                        .foregroundColor(.white.opacity(0.45))
+                }
+            }
+            .navigationTitle("详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("返回") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        toggleFavorite()
+                    } label: {
+                        Image(systemName: isFav ? "heart.fill" : "heart")
+                            .foregroundColor(isFav ? theme.accent : .white)
+                    }
+                }
+            }
+            .fullScreenCover(item: $playTarget) { target in
+                VodPlayerView(target: target)
+            }
+            .onAppear { Task { await loadDetail() } }
+        }
+        .navigationViewStyle(.stack)
+        .tint(theme.accent)
+    }
+
+    // MARK: - 内容
+
+    private func content(_ detail: VodDetail) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header(detail)
+
+                if let content = detail.content, !content.isEmpty {
+                    infoBlock(title: "简介", text: content)
+                }
+                if let actor = detail.actor, !actor.isEmpty {
+                    infoBlock(title: "主演", text: actor)
+                }
+                if let director = detail.director, !director.isEmpty {
+                    infoBlock(title: "导演", text: director)
+                }
+
+                if !detail.lines.isEmpty {
+                    lineSelector(detail)
+                    episodeGrid
+                } else {
+                    Text("这个影片没有可用播放线路")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.45))
+                        .padding(.vertical, 16)
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func header(_ detail: VodDetail) -> some View {
+        HStack(spacing: 16) {
+            VodCover(pic: item.pic, width: 110, height: 150)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(item.name)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(3)
+
+                HStack(spacing: 8) {
+                    if let year = item.year, !year.isEmpty {
+                        Text(year).font(.system(size: 12))
+                    }
+                    if let area = item.area, !area.isEmpty {
+                        Text(area).font(.system(size: 12))
+                    }
+                    if let remarks = item.remarks, !remarks.isEmpty {
+                        Text(remarks).font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.accent)
+                    }
+                }
+                .foregroundColor(.white.opacity(0.55))
+
+                if let typeName = item.typeName, !typeName.isEmpty {
+                    Text(typeName).font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.45))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func infoBlock(title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(theme.accent)
+            Text(text)
+                .font(.system(size: 13))
+                .lineSpacing(5)
+                .foregroundColor(.white.opacity(0.75))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func lineSelector(_ detail: VodDetail) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("线路")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(detail.lines.indices, id: \.self) { index in
+                        Button {
+                            lineIndex = index
+                        } label: {
+                            Text(detail.lines[index].name)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(lineIndex == index ? .white : .white.opacity(0.55))
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(lineIndex == index ? theme.accent.opacity(0.22) : Color.white.opacity(0.06)))
+                                .overlay(Capsule().stroke(lineIndex == index ? theme.accent.opacity(0.35) : Color.white.opacity(0.08), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var episodeGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("选集")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
+                if let line = currentLine {
+                    ForEach(line.episodes) { episode in
+                        Button {
+                            playTarget = VodPlayTarget(
+                                title: item.name,
+                                episodeName: episode.name,
+                                url: episode.url,
+                                siteName: siteName,
+                                pic: item.pic
+                            )
+                        } label: {
+                            Text(episode.name)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                                .background(Color.white.opacity(0.07))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 30, weight: .light))
+                .foregroundColor(.white.opacity(0.35))
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.55))
+                .multilineTextAlignment(.center)
+            Button("重试") { Task { await loadDetail() } }
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 9)
+                .background(theme.accent)
+                .foregroundColor(.black)
+                .clipShape(Capsule())
+        }
+        .padding(32)
+    }
+
+    // MARK: - 数据
+
+    @MainActor
+    private func loadDetail() async {
+        guard let site = store.activeSite else {
+            errorText = "先选择一个影视接口"
+            loading = false
+            return
+        }
+        loading = true
+        errorText = nil
+        do {
+            let result = try await VodClient.shared.detail(site: site, vodID: item.id)
+            detail = result
+            lineIndex = 0
+            loading = false
+        } catch {
+            errorText = error.localizedDescription
+            loading = false
+        }
+    }
+
+    private var favoriteURL: String? {
+        currentLine?.episodes.first?.url ?? item.id
+    }
+
+    private var isFav: Bool {
+        guard let url = favoriteURL else { return false }
+        return store.isFavorited(url)
+    }
+
+    private func toggleFavorite() {
+        guard let episode = currentLine?.episodes.first else { return }
+        let snapshot = VodHistoryItem(
+            id: UUID(),
+            name: item.name,
+            pic: item.pic,
+            url: episode.url,
+            episodeName: episode.name,
+            siteName: siteName,
+            playedAt: Date()
+        )
+        store.toggleFavorite(snapshot)
+    }
+}

@@ -36,6 +36,7 @@ struct LibraryView: View {
     @State private var showSettings = false
     @State private var showLive = false
     @State private var showLiveSource = false
+    @State private var showVod = false
     @State private var selected: MediaItem?
     @State private var importErrors: String?
     @State private var showErrors = false
@@ -126,6 +127,9 @@ struct LibraryView: View {
                                                          : .primary)
                                 }
                             }
+                            Button { showVod = true } label: {
+                                Image(systemName: "play.tv.fill")
+                            }
                             Button { showLive = true } label: {
                                 Image(systemName: "waveform")
                             }
@@ -173,6 +177,9 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showLiveSource) {
                 LiveSourceView()
+            }
+            .sheet(isPresented: $showVod) {
+                VodView()
             }
             .sheet(item: $jobTarget, onDismiss: { library.reload() }) { target in
                 JobView(videoURL: target.url)
@@ -1048,7 +1055,7 @@ struct LibraryView: View {
 }
 
 /// 主页入口点按：轻微缩放 + 透明度，带柔和回弹
-private struct HomePressStyle: ButtonStyle {
+struct HomePressStyle: ButtonStyle {
     let accent: Color
 
     func makeBody(configuration: Configuration) -> some View {
