@@ -93,8 +93,15 @@ final class VodStore: ObservableObject {
     private let activeKey = "vodActiveSite"
     private let historyKey = "vodHistory"
     private let favKey = "vodFavorites"
+    private let seededKey = "vodSeededV1"
     private let maxHistory = 30
     private let maxFavorites = 200
+
+    /// 内置默认源：经纯直连实测可达的苹果 CMS 采集站；公开源会失效，失效后可在 App 内换源
+    private static let builtinSites: [(name: String, api: String)] = [
+        ("360资源", "https://360zy.com/api.php/provide/vod/"),
+        ("豪华资源", "https://hhzyapi.com/api.php/provide/vod/")
+    ]
 
     static let shared = VodStore()
 
@@ -103,7 +110,17 @@ final class VodStore: ObservableObject {
         loadHistory()
         loadFavorites()
         loadActive()
+        seedBuiltins()
         ensureActive()
+    }
+
+    /// 首次启动写入内置默认源；只种子一次，之后用户删除不再自动恢复
+    private func seedBuiltins() {
+        guard !UserDefaults.standard.bool(forKey: seededKey) else { return }
+        for entry in Self.builtinSites {
+            _ = addSite(name: entry.name, api: entry.api, searchable: true)
+        }
+        UserDefaults.standard.set(true, forKey: seededKey)
     }
 
     // MARK: 加载 / 保存
