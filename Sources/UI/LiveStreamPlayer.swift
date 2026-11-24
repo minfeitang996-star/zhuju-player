@@ -253,6 +253,18 @@ struct LiveStreamPlayer: View {
                 Spacer()
 
                 Button {
+                    store.toggleFavorite(name: channel.name, url: channel.primaryURL, label: channel.category)
+                } label: {
+                    Image(systemName: store.isFavorited(channel.primaryURL) ? "heart.fill" : "heart")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(store.isFavorited(channel.primaryURL) ? theme.accent : .white)
+                        .frame(width: 38, height: 38)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
+                Button {
                     openPanel = (openPanel == .source) ? nil : .source
                 } label: {
                     HStack(spacing: 6) {

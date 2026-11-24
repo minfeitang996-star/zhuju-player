@@ -8,7 +8,7 @@ struct LiveSource: Identifiable, Codable, Equatable {
     var url: String
 }
 
-/// 一个自定义网络直播频道
+/// 一个网络直播频道
 struct LiveChannel: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
@@ -122,7 +122,7 @@ struct LiveChannel: Identifiable, Codable, Equatable {
     }
 }
 
-/// 最近看过的一条频道快照：不依赖频道是否还在收藏里，删掉频道后历史仍可回看
+/// 一条快照记录（历史 / 收藏通用）：不依赖频道是否还在配置里，删掉后仍可回看
 struct LiveHistoryItem: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
@@ -131,33 +131,57 @@ struct LiveHistoryItem: Identifiable, Codable, Equatable {
     var playedAt: Date
 }
 
+/// 一个直播配置（订阅源 / 本地连接组）：点配置即切换到这套频道
+struct LivePlaylist: Identifiable, Codable, Equatable {
+    let id: UUID
+    var title: String
+    /// 订阅地址；nil 表示本地配置（手动添加 / 内置示例）
+    var feedURL: String?
+    var channels: [LiveChannel]
+    var createdAt: Date
+    var updatedAt: Date
+    var isBuiltin: Bool
+}
+
 /// 直播源清单：本地存 UserDefaults，不联网刮削
 final class LiveSourceStore: ObservableObject {
 
-    @Published var channels: [LiveChannel] = []
+    @Published var playlists: [LivePlaylist] = []
+    @Published var activePlaylistID: UUID?
     @Published var history: [LiveHistoryItem] = []
+    @Published var favorites: [LiveHistoryItem] = []
 
-    private let key = "liveChannels"
+    private let playlistsKey = "livePlaylistsV2"
+    private let oldChannelsKey = "liveChannels"
     private let historyKey = "liveHistory"
-    private let seedKey = "liveSeededV1"
+    private let favoriteKey = "liveFavorites"
+    private let activeKey = "liveActivePlaylist"
+    private let migrateKey = "liveMigratedV2"
     private let maxHistory = 30
+    private let maxFavorites = 200
     static let shared = LiveSourceStore()
 
     private init() {
-        load()
+        loadPlaylists()
         loadHistory()
-        seedBuiltinIfNeeded()
+        loadFavorites()
+        loadActive()
+        migrateIfNeeded()
+        seedIfNeeded()
+        ensureActive()
     }
 
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([LiveChannel].self, from: data) else { return }
-        channels = decoded
+    // MARK: - 加载 / 保存
+
+    private func loadPlaylists() {
+        guard let data = UserDefaults.standard.data(forKey: playlistsKey),
+              let decoded = try? JSONDecoder().decode([LivePlaylist].self, from: data) else { return }
+        playlists = decoded
     }
 
-    private func save() {
-        if let data = try? JSONEncoder().encode(channels) {
-            UserDefaults.standard.set(data, forKey: key)
+    private func savePlaylists() {
+        if let data = try? JSONEncoder().encode(playlists) {
+            UserDefaults.standard.set(data, forKey: playlistsKey)
         }
     }
 
@@ -172,6 +196,257 @@ final class LiveSourceStore: ObservableObject {
             UserDefaults.standard.set(data, forKey: historyKey)
         }
     }
+
+    private func loadFavorites() {
+        guard let data = UserDefaults.standard.data(forKey: favoriteKey),
+              let decoded = try? JSONDecoder().decode([LiveHistoryItem].self, from: data) else { return }
+        favorites = decoded.sorted { $0.playedAt > $1.playedAt }
+    }
+
+    private func saveFavorites() {
+        if let data = try? JSONEncoder().encode(favorites) {
+            UserDefaults.standard.set(data, forKey: favoriteKey)
+        }
+    }
+
+    private func loadActive() {
+        if let data = UserDefaults.standard.data(forKey: activeKey),
+           let id = try? JSONDecoder().decode(UUID.self, from: data) {
+            activePlaylistID = id
+        }
+    }
+
+    private func saveActive() {
+        if let activePlaylistID {
+            if let data = try? JSONEncoder().encode(activePlaylistID) {
+                UserDefaults.standard.set(data, forKey: activeKey)
+            }
+        } else {
+            UserDefaults.standard.removeObject(forKey: activeKey)
+        }
+    }
+
+    // MARK: - 迁移与内置示例
+
+    /// 旧版扁平频道池迁移到配置：内置 / 手动 / 已导入各归一个配置
+    private func migrateIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: migrateKey) else { return }
+        UserDefaults.standard.set(true, forKey: migrateKey)
+        guard let data = UserDefaults.standard.data(forKey: oldChannelsKey),
+              let old = try? JSONDecoder().decode([LiveChannel].self, from: data),
+              !old.isEmpty else { return }
+
+        let builtin = old.filter { $0.kind == "builtin" }
+        let manual = old.filter { $0.kind == "manual" }
+        let imported = old.filter { $0.kind != "builtin" && $0.kind != "manual" }
+
+        if !builtin.isEmpty {
+            playlists.append(LivePlaylist(id: UUID(), title: "示例频道", feedURL: nil,
+                                           channels: builtin, createdAt: Date(), updatedAt: Date(), isBuiltin: true))
+        }
+        if !manual.isEmpty {
+            playlists.append(LivePlaylist(id: UUID(), title: "我的连接", feedURL: nil,
+                                           channels: manual, createdAt: Date(), updatedAt: Date(), isBuiltin: false))
+        }
+        if !imported.isEmpty {
+            playlists.append(LivePlaylist(id: UUID(), title: "已导入", feedURL: nil,
+                                           channels: imported, createdAt: Date(), updatedAt: Date(), isBuiltin: false))
+        }
+        savePlaylists()
+    }
+
+    /// 全新安装：内置少量实测可达的示例频道 + 一个空的「我的连接」本地配置
+    private func seedIfNeeded() {
+        guard playlists.isEmpty else { return }
+        let samples: [(name: String, url: String)] = [
+            ("CCTV+ 综合", "https://cd-live-stream.news.cctvplus.com/live/smil:CHANNEL1.smil/playlist.m3u8"),
+            ("广州综合", "https://tencentplaybusiness.gztv.com/live/zonghes.m3u8"),
+            ("哈尔滨影视", "https://stream.hrbtv.net/yspd/playlist.m3u8"),
+            ("河北卫视", "https://event.pull.hebtv.com/live/live101.m3u8"),
+            ("青岛 QTV-2", "http://video10.qtv.com.cn/drm/qtv2at/manifest.m3u8"),
+            ("浙江国际", "https://ali-m-l.cztv.com/channels/lantian/channel10/1080p.m3u8"),
+            ("安徽卫视", "https://restream.pdtvhd.com/memfs/c1cd2ed0-3b2b-4c25-af98-a7fb0b1eb130.m3u8")
+        ]
+        let sampleChannels = samples.map {
+            LiveChannel(id: UUID(), name: $0.name,
+                        sources: [LiveSource(id: UUID(), label: "一源", url: $0.url)],
+                        group: "示例频道", kind: "builtin")
+        }
+        let builtin = LivePlaylist(id: UUID(), title: "示例频道", feedURL: nil,
+                                   channels: sampleChannels, createdAt: Date(), updatedAt: Date(), isBuiltin: true)
+        let mine = LivePlaylist(id: UUID(), title: "我的连接", feedURL: nil,
+                                channels: [], createdAt: Date(), updatedAt: Date(), isBuiltin: false)
+        playlists = [builtin, mine]
+        savePlaylists()
+    }
+
+    private func ensureActive() {
+        if let activePlaylistID, playlists.contains(where: { $0.id == activePlaylistID }) { return }
+        activePlaylistID = playlists.first?.id
+        saveActive()
+    }
+
+    // MARK: - 当前配置
+
+    var activePlaylist: LivePlaylist? {
+        if let activePlaylistID, let found = playlists.first(where: { $0.id == activePlaylistID }) {
+            return found
+        }
+        return playlists.first
+    }
+
+    var activeChannels: [LiveChannel] { activePlaylist?.channels ?? [] }
+
+    /// 全部配置里的频道，用于全局搜索
+    var allChannels: [LiveChannel] { playlists.flatMap { $0.channels } }
+
+    // MARK: - 配置操作
+
+    func selectPlaylist(_ id: UUID) {
+        activePlaylistID = id
+        saveActive()
+    }
+
+    @discardableResult
+    func addPlaylist(title: String, feedURL: String?, channels: [LiveChannel], isBuiltin: Bool = false) -> LivePlaylist {
+        let pl = LivePlaylist(id: UUID(), title: title, feedURL: feedURL, channels: channels,
+                              createdAt: Date(), updatedAt: Date(), isBuiltin: isBuiltin)
+        playlists.append(pl)
+        savePlaylists()
+        activePlaylistID = pl.id
+        saveActive()
+        return pl
+    }
+
+    func deletePlaylist(_ id: UUID) {
+        playlists.removeAll { $0.id == id }
+        if activePlaylistID == id {
+            activePlaylistID = playlists.first?.id
+            saveActive()
+        }
+        savePlaylists()
+    }
+
+    func renamePlaylist(_ id: UUID, title: String) {
+        guard let idx = playlists.firstIndex(where: { $0.id == id }) else { return }
+        playlists[idx].title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        savePlaylists()
+    }
+
+    /// 按订阅地址重新拉取并替换整套频道
+    func refreshPlaylist(_ id: UUID) async throws {
+        guard let idx = playlists.firstIndex(where: { $0.id == id }),
+              let feedURL = playlists[idx].feedURL,
+              let url = URL(string: feedURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw NSError(domain: "live", code: -1, userInfo: [NSLocalizedDescriptionKey: "这个配置没有订阅地址"])
+        }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw NSError(domain: "live", code: -2, userInfo: [NSLocalizedDescriptionKey: "列表返回异常"])
+        }
+        let text = String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .isoLatin1)
+            ?? ""
+        let entries = M3UParser.parse(text)
+        guard !entries.isEmpty else {
+            throw NSError(domain: "live", code: -3, userInfo: [NSLocalizedDescriptionKey: "没解析到可用频道"])
+        }
+        let channels = entries.map {
+            LiveChannel(id: UUID(), name: $0.name,
+                        sources: [LiveSource(id: UUID(), label: "一源", url: $0.url)],
+                        group: $0.group, kind: "imported")
+        }
+        await MainActor.run {
+            playlists[idx].channels = channels
+            playlists[idx].updatedAt = Date()
+            savePlaylists()
+        }
+    }
+
+    // MARK: - 频道操作（在所属配置内）
+
+    private func locate(channelID: UUID) -> (playlistIdx: Int, channelIdx: Int)? {
+        for p in playlists.indices {
+            if let c = playlists[p].channels.firstIndex(where: { $0.id == channelID }) {
+                return (p, c)
+            }
+        }
+        return nil
+    }
+
+    @discardableResult
+    func addChannel(to playlistID: UUID, name: String, url: String) -> LiveChannel? {
+        guard let p = playlists.firstIndex(where: { $0.id == playlistID }) else { return nil }
+        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidURL(trimmedURL) else { return nil }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 同名频道：把新地址追加成下一条线路
+        if let c = playlists[p].channels.firstIndex(where: {
+            $0.name.localizedStandardCompare(trimmedName) == .orderedSame
+        }) {
+            appendSource(to: playlists[p].channels[c].id, url: trimmedURL)
+            return playlists[p].channels[c]
+        }
+
+        let channel = LiveChannel(
+            id: UUID(),
+            name: trimmedName.isEmpty ? trimmedURL : trimmedName,
+            sources: [LiveSource(id: UUID(), label: Self.sourceLabel(index: 0), url: trimmedURL)],
+            group: nil,
+            kind: "manual"
+        )
+        playlists[p].channels.append(channel)
+        playlists[p].updatedAt = Date()
+        savePlaylists()
+        return channel
+    }
+
+    func updateChannel(_ channelID: UUID, name: String, url: String) {
+        guard let (p, c) = locate(channelID: channelID) else { return }
+        playlists[p].channels[c].name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if playlists[p].channels[c].sources.isEmpty {
+            playlists[p].channels[c].sources = [LiveSource(id: UUID(), label: "一源", url: trimmedURL)]
+        } else {
+            playlists[p].channels[c].sources[0].url = trimmedURL
+        }
+        playlists[p].updatedAt = Date()
+        savePlaylists()
+    }
+
+    func deleteChannel(_ channelID: UUID) {
+        guard let (p, c) = locate(channelID: channelID) else { return }
+        playlists[p].channels.remove(at: c)
+        playlists[p].updatedAt = Date()
+        savePlaylists()
+    }
+
+    @discardableResult
+    func appendSource(to channelID: UUID, url: String) -> LiveSource? {
+        guard let (p, c) = locate(channelID: channelID) else { return nil }
+        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidURL(trimmedURL),
+              !playlists[p].channels[c].sources.contains(where: { $0.url == trimmedURL }) else { return nil }
+        let label = Self.sourceLabel(index: playlists[p].channels[c].sources.count)
+        let source = LiveSource(id: UUID(), label: label, url: trimmedURL)
+        playlists[p].channels[c].sources.append(source)
+        playlists[p].updatedAt = Date()
+        savePlaylists()
+        return source
+    }
+
+    func deleteSource(channelID: UUID, sourceID: UUID) {
+        guard let (p, c) = locate(channelID: channelID) else { return }
+        playlists[p].channels[c].sources.removeAll { $0.id == sourceID }
+        if playlists[p].channels[c].sources.isEmpty {
+            playlists[p].channels.remove(at: c)
+        }
+        playlists[p].updatedAt = Date()
+        savePlaylists()
+    }
+
+    // MARK: - 历史
 
     /// 最近看过：同一条地址去重置顶，最多保留 maxHistory 条
     func recordHistory(name: String, url: String, label: String) {
@@ -200,114 +475,43 @@ final class LiveSourceStore: ObservableObject {
         saveHistory()
     }
 
-    /// 手动添加的连接（我的连接）
-    var manualChannels: [LiveChannel] {
-        channels.filter { $0.kind == "manual" }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    // MARK: - 收藏（跨配置快照）
+
+    func toggleFavorite(name: String, url: String, label: String) {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidURL(trimmed) else { return }
+        if let idx = favorites.firstIndex(where: { $0.url == trimmed }) {
+            favorites.remove(at: idx)
+        } else {
+            let item = LiveHistoryItem(
+                id: UUID(),
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? trimmed : name,
+                url: trimmed,
+                label: label,
+                playedAt: Date()
+            )
+            favorites.insert(item, at: 0)
+            if favorites.count > maxFavorites { favorites.removeLast(favorites.count - maxFavorites) }
+        }
+        saveFavorites()
     }
 
-    /// 内置示例频道
-    var builtinChannels: [LiveChannel] {
-        channels.filter { $0.kind == "builtin" }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    func isFavorited(_ url: String) -> Bool {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        return favorites.contains { $0.url == trimmed }
     }
 
-    /// 链接是否像一个可用的流地址（http/https/rtsp/rtmp/udp/mms 等）
+    func removeFavorite(_ id: UUID) {
+        favorites.removeAll { $0.id == id }
+        saveFavorites()
+    }
+
+    // MARK: - 工具
+
     static func isValidURL(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.contains("://") else { return false }
         return URLComponents(string: trimmed)?.url != nil
-    }
-
-    @discardableResult
-    func add(name: String, url: String, group: String? = nil, kind: String = "manual") -> LiveChannel? {
-        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isValidURL(trimmedURL) else { return nil }
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // 同名频道：把新地址追加成下一条线路，而不是重复建频道
-        if let existing = channels.first(where: {
-            $0.name.localizedStandardCompare(trimmedName) == .orderedSame
-        }) {
-            appendSource(to: existing.id, url: trimmedURL)
-            return existing
-        }
-
-        let channel = LiveChannel(
-            id: UUID(),
-            name: trimmedName.isEmpty ? trimmedURL : trimmedName,
-            sources: [LiveSource(id: UUID(), label: Self.sourceLabel(index: 0), url: trimmedURL)],
-            group: group,
-            kind: kind
-        )
-        channels.append(channel)
-        save()
-        return channel
-    }
-
-    func add(_ list: [LiveChannel]) {
-        for incoming in list {
-            let normalizedName = incoming.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let existing = channels.first(where: {
-                $0.name.localizedStandardCompare(normalizedName) == .orderedSame
-            }) {
-                for source in incoming.sources {
-                    if Self.isValidURL(source.url),
-                       !existing.sources.contains(where: { $0.url == source.url }) {
-                        appendSource(to: existing.id, url: source.url)
-                    }
-                }
-            } else {
-                var cloned = incoming
-                cloned.kind = "imported"
-                channels.append(cloned)
-            }
-        }
-        save()
-    }
-
-    func delete(_ id: UUID) {
-        channels.removeAll { $0.id == id }
-        save()
-    }
-
-    func delete(_ ids: Set<UUID>) {
-        channels.removeAll { ids.contains($0.id) }
-        save()
-    }
-
-    func update(_ id: UUID, name: String, url: String) {
-        guard let idx = channels.firstIndex(where: { $0.id == id }) else { return }
-        channels[idx].name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        if channels[idx].sources.isEmpty {
-            channels[idx].sources = [LiveSource(id: UUID(), label: "一源", url: trimmedURL)]
-        } else {
-            channels[idx].sources[0].url = trimmedURL
-        }
-        save()
-    }
-
-    @discardableResult
-    func appendSource(to channelID: UUID, url: String) -> LiveSource? {
-        guard let idx = channels.firstIndex(where: { $0.id == channelID }) else { return nil }
-        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Self.isValidURL(trimmedURL),
-              !channels[idx].sources.contains(where: { $0.url == trimmedURL }) else { return nil }
-        let label = Self.sourceLabel(index: channels[idx].sources.count)
-        let source = LiveSource(id: UUID(), label: label, url: trimmedURL)
-        channels[idx].sources.append(source)
-        save()
-        return source
-    }
-
-    func deleteSource(channelID: UUID, sourceID: UUID) {
-        guard let idx = channels.firstIndex(where: { $0.id == channelID }) else { return }
-        channels[idx].sources.removeAll { $0.id == sourceID }
-        if channels[idx].sources.isEmpty {
-            channels.removeAll { $0.id == channelID }
-        }
-        save()
     }
 
     private static func sourceLabel(index: Int) -> String {
@@ -316,40 +520,14 @@ final class LiveSourceStore: ObservableObject {
         return "源\(index + 1)"
     }
 
-    /// 预设公开订阅列表：点一下拉取并导入，源由上游维护，比写死直链耐用
+    /// 预设公开订阅列表：点一下拉取建成配置，源由上游维护，比写死直链耐用
     static let presetFeeds: [(title: String, url: String)] = [
         ("央视 / 卫视聚合", "http://live.fanmingming.cn/tv/m3u/index.m3u"),
         ("iptv-org 中国频道", "https://iptv-org.github.io/iptv/countries/cn.m3u")
     ]
-
-    /// 首次安装写入少量实测可达的示例频道；用户删掉后不会再次自动塞回
-    private func seedBuiltinIfNeeded() {
-        guard !UserDefaults.standard.bool(forKey: seedKey) else { return }
-        UserDefaults.standard.set(true, forKey: seedKey)
-
-        let samples: [(name: String, url: String)] = [
-            ("CCTV+ 综合", "https://cd-live-stream.news.cctvplus.com/live/smil:CHANNEL1.smil/playlist.m3u8"),
-            ("广州综合", "https://tencentplaybusiness.gztv.com/live/zonghes.m3u8"),
-            ("哈尔滨影视", "https://stream.hrbtv.net/yspd/playlist.m3u8"),
-            ("河北卫视", "https://event.pull.hebtv.com/live/live101.m3u8"),
-            ("青岛 QTV-2", "http://video10.qtv.com.cn/drm/qtv2at/manifest.m3u8"),
-            ("浙江国际", "https://ali-m-l.cztv.com/channels/lantian/channel10/1080p.m3u8"),
-            ("安徽卫视", "https://restream.pdtvhd.com/memfs/c1cd2ed0-3b2b-4c25-af98-a7fb0b1eb130.m3u8")
-        ]
-        for item in samples {
-            channels.append(LiveChannel(
-                id: UUID(),
-                name: item.name,
-                sources: [LiveSource(id: UUID(), label: "一源", url: item.url)],
-                group: "示例频道",
-                kind: "builtin"
-            ))
-        }
-        save()
-    }
 }
 
-/// m3u / m3u8 播放列表解析：只取频道名、分组和流地址，不做网络请求
+/// m3u / m3u8 / txt 播放列表解析：只取频道名、分组和流地址，不做网络请求
 enum M3UParser {
 
     struct Entry: Equatable {
