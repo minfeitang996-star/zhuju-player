@@ -80,74 +80,75 @@ struct LiveSourceView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                theme.background.ignoresSafeArea()
-
-                Group {
-                    switch tab {
-                    case .channels: channelsBody
-                    case .favorites: favoritesBody
-                    case .playlists: playlistsBody
-                    }
-                }
-            }
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索频道")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if tab == .channels && currentFolder != nil {
-                        Button {
-                            currentFolder = nil
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-                    } else {
-                        Button("关闭") { dismiss() }
-                            .foregroundColor(theme.accent)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    trailingButton
-                }
-            }
-            .sheet(isPresented: $showAddChannel) {
-                ChannelForm(mode: .single, targetPlaylistID: store.activePlaylist?.id)
-            }
-            .sheet(item: $editing) { channel in
-                ChannelForm(mode: .edit, existing: channel)
-            }
-            .sheet(isPresented: $showAddPlaylist) {
-                PlaylistForm()
-            }
-            .fullScreenCover(item: $active) { channel in
-                LiveStreamPlayer(channel: channel)
-            }
-            .alert("清空最近看过的记录？", isPresented: $showClearHistory) {
-                Button("取消", role: .cancel) { }
-                Button("清空", role: .destructive) { store.clearHistory() }
-            } message: {
-                Text("只清除观看记录，不会删掉已添加的直播源。")
-            }
-            .alert("配置拉取出错", isPresented: .constant(refreshError != nil)) {
-                Button("知道了") { refreshError = nil }
-            } message: {
-                Text(refreshError ?? "")
-            }
-            .alert("重命名配置", isPresented: .constant(renameTarget != nil)) {
-                TextField("配置名称", text: $renameText)
-                Button("取消") { renameTarget = nil }
-                Button("保存") {
-                    if let target = renameTarget {
-                        store.renamePlaylist(target.id, title: renameText)
-                    }
-                    renameTarget = nil
-                }
-            }
+            mainContent
         }
         .navigationViewStyle(.stack)
         .tint(theme.accent)
         .safeAreaInset(edge: .bottom) { bottomTabBar }
+        .sheet(isPresented: $showAddChannel) {
+            ChannelForm(mode: .single, targetPlaylistID: store.activePlaylist?.id)
+        }
+        .sheet(item: $editing) { ChannelForm(mode: .edit, existing: $0) }
+        .sheet(isPresented: $showAddPlaylist) { PlaylistForm() }
+        .fullScreenCover(item: $active) { LiveStreamPlayer(channel: $0) }
+        .alert("清空最近看过的记录？", isPresented: $showClearHistory) {
+            Button("取消", role: .cancel) { }
+            Button("清空", role: .destructive) { store.clearHistory() }
+        } message: {
+            Text("只清除观看记录，不会删掉已添加的直播源。")
+        }
+        .alert("配置拉取出错", isPresented: .constant(refreshError != nil)) {
+            Button("知道了") { refreshError = nil }
+        } message: {
+            Text(refreshError ?? "")
+        }
+        .alert("重命名配置", isPresented: .constant(renameTarget != nil)) {
+            TextField("配置名称", text: $renameText)
+            Button("取消") { renameTarget = nil }
+            Button("保存") {
+                if let target = renameTarget {
+                    store.renamePlaylist(target.id, title: renameText)
+                }
+                renameTarget = nil
+            }
+        }
+    }
+
+    private var mainContent: some View {
+        ZStack {
+            theme.background.ignoresSafeArea()
+
+            Group {
+                switch tab {
+                case .channels: channelsBody
+                case .favorites: favoritesBody
+                case .playlists: playlistsBody
+                }
+            }
+        }
+        .navigationTitle(navigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "搜索频道")
+        .toolbar { mainToolbar }
+    }
+
+    @ToolbarContentBuilder
+    private var mainToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            if tab == .channels && currentFolder != nil {
+                Button {
+                    currentFolder = nil
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+            } else {
+                Button("关闭") { dismiss() }
+                    .foregroundColor(theme.accent)
+            }
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            trailingButton
+        }
     }
 
     private var navigationTitle: String {
