@@ -73,6 +73,13 @@ struct ImportedSite: Equatable {
     let searchable: Bool
 }
 
+/// 配置导入结果：分别统计可导入站点、被跳过的 JS 爬虫源、无效地址
+struct ConfigImportResult: Equatable {
+    let added: [ImportedSite]
+    let crawlerSkipped: Int
+    let invalidSkipped: Int
+}
+
 // MARK: - 点播源清单（本地持久化）
 
 final class VodStore: ObservableObject {
@@ -218,13 +225,14 @@ final class VodStore: ObservableObject {
     }
 
     /// 解析 TVBox / 影视仓配置 JSON，把可用的直采站点批量加入。
-    /// - Returns: 新加入数量与跳过数量（type=3 的 JS 爬虫源在原生端跑不了，跳过）
-    static func parseConfig(data: Data) -> (added: [ImportedSite], skipped: Int) {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return ([], 0)
+    /// - Parameters:
+    ///   - data: 配置原文（允许带 `//`、`/* */` 注释的 JSONC）
+    ///   - baseURL: 配置链接本身，用于把 `./xxx` 这类相对接口地址补成绝对地址
+    static func parseConfig(data: Data, baseURL: URL?) -> ConfigImportResult {
+        guard let cleaned = stripJSONComments(data: data),
+              let json = try? JSONSerialization.jsonObject(with: cleaned) as? [String: Any] else {
+            return ConfigImportResult(added: [], crawlerSkipped: 0, invalidSkipped: 0)
         }
-        var added: [ImportedSite] = []
-        var skipped = 0
 
         // 兼容多个配置键：sites / urls / site
         let candidates: [[String: Any]] =
@@ -232,18 +240,84 @@ final class VodStore: ObservableObject {
             (json["urls"] as? [[String: Any]] ?? []) +
             (json["site"] as? [[String: Any]] ?? [])
 
+        var added: [ImportedSite] = []
+        var crawlerSkipped = 0
+        var invalidSkipped = 0
+
         for entry in candidates {
-            let api = (entry["api"] as? String) ?? (entry["url"] as? String) ?? ""
+            let rawAPI = (entry["api"] as? String) ?? (entry["url"] as? String) ?? ""
             let name = (entry["name"] as? String) ?? (entry["title"] as? String) ?? ""
             let type = entry["type"] as? Int ?? (entry["type"] as? Double).map { Int($0) }
-            // type 3 是依赖 JS 引擎的 CSP 爬虫源，iOS 原生无法执行，跳过
-            if type == 3 { skipped += 1; continue }
-            let trimmedAPI = api.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard isValidURL(trimmedAPI) else { skipped += 1; continue }
+
+            // type 3 是依赖 JS 引擎的 CSP / drpy 爬虫源，iOS 原生无法执行，跳过
+            if type == 3 { crawlerSkipped += 1; continue }
+
+            guard let api = Self.resolveAPI(rawAPI, base: baseURL), Self.isValidURL(api) else {
+                invalidSkipped += 1
+                continue
+            }
             let searchable = (entry["searchable"] as? Int ?? 1) != 0
-            added.append(ImportedSite(name: name, api: trimmedAPI, searchable: searchable))
+            added.append(ImportedSite(name: name, api: api, searchable: searchable))
         }
-        return (added, skipped)
+        return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped)
+    }
+
+    /// 把配置里的相对接口地址（`./xxx`、`//host/xxx`）补成绝对地址；无法识别返回 nil
+    private static func resolveAPI(_ raw: String, base: URL?) -> String? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+        if t.hasPrefix("//") { return "https:" + t }
+        if t.contains("://") { return t }
+        guard let base else { return nil }
+        guard let rel = URL(string: t, relativeTo: base) else { return nil }
+        let abs = rel.absoluteString
+        return abs.contains("://") ? abs : nil
+    }
+
+    /// 剥离 JSONC 的行注释 `//`、块注释 `/* */` 与尾随逗号；字符串字面量内的内容原样保留
+    private static func stripJSONComments(data: Data) -> Data? {
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        let chars = Array(text)
+        var out: [Character] = []
+        var i = 0
+        var inString = false
+        var escape = false
+
+        while i < chars.count {
+            let c = chars[i]
+            if inString {
+                out.append(c)
+                if escape { escape = false }
+                else if c == "\\" { escape = true }
+                else if c == "\"" { inString = false }
+                i += 1
+                continue
+            }
+            if c == "\"" {
+                inString = true
+                out.append(c)
+                i += 1
+                continue
+            }
+            if c == "/", i + 1 < chars.count, chars[i + 1] == "/" {
+                while i < chars.count, chars[i] != "\n" { i += 1 }
+                continue
+            }
+            if c == "/", i + 1 < chars.count, chars[i + 1] == "*" {
+                i += 2
+                while i < chars.count {
+                    if chars[i] == "*", i + 1 < chars.count, chars[i + 1] == "/" { i += 2; break }
+                    i += 1
+                }
+                continue
+            }
+            out.append(c)
+            i += 1
+        }
+
+        var cleaned = String(out)
+        cleaned = cleaned.replacingOccurrences(of: ",(?=\\s*[}\\]])", with: "", options: .regularExpression)
+        return cleaned.data(using: .utf8)
     }
 
     // MARK: 历史

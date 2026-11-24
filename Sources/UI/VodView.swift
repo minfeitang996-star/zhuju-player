@@ -446,7 +446,7 @@ private struct VodSiteForm: View {
                             Text("采集站接口地址")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.6))
-                            TextField("https://xxx/api.php/provide/vod/", text: $api)
+                            TextField("https://域名/api.php/provide/vod/（填域名也会自动补全）", text: $api)
                                 .keyboardType(.URL)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
@@ -502,7 +502,7 @@ private struct VodSiteForm: View {
                             Text(resultText).font(.system(size: 12)).foregroundColor(theme.accent)
                         }
 
-                        Text("只支持返回 JSON 直链的苹果 CMS 采集源；依赖 JS 脚本的爬虫源（type 3）在手机原生端无法运行，会被自动跳过。")
+                        Text("只支持返回 JSON 的苹果 CMS 直采源（type 1）；JS 爬虫源（csp_/drpy/.js，type 3）原生端无法运行会跳过；网盘聚合、Emby、YouTube 等需专用客户端的源也不支持。")
                             .font(.system(size: 11.5))
                             .lineSpacing(4)
                             .foregroundColor(.white.opacity(0.4))
@@ -543,9 +543,10 @@ private struct VodSiteForm: View {
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 throw NSError(domain: "vod", code: -2, userInfo: [NSLocalizedDescriptionKey: "配置返回异常"])
             }
-            let parsed = VodStore.parseConfig(data: data)
+            let parsed = VodStore.parseConfig(data: data, baseURL: url)
             guard !parsed.added.isEmpty else {
-                throw NSError(domain: "vod", code: -3, userInfo: [NSLocalizedDescriptionKey: "配置里没有可用的直采站点"])
+                let reason = "配置里没有可用的直采站点（JS 爬虫源 \(parsed.crawlerSkipped) 个不支持，无效地址 \(parsed.invalidSkipped) 个）"
+                throw NSError(domain: "vod", code: -3, userInfo: [NSLocalizedDescriptionKey: reason])
             }
             var added = 0
             for site in parsed.added {
@@ -554,7 +555,10 @@ private struct VodSiteForm: View {
                 }
             }
             await MainActor.run {
-                resultText = "已导入 \(added) 个站点" + (parsed.skipped > 0 ? "，跳过 \(parsed.skipped) 个不可用源" : "")
+                var summary = "已导入 \(added) 个站点"
+                if parsed.crawlerSkipped > 0 { summary += "；爬虫源跳过 \(parsed.crawlerSkipped) 个" }
+                if parsed.invalidSkipped > 0 { summary += "；无效地址跳过 \(parsed.invalidSkipped) 个" }
+                resultText = summary
                 importing = false
             }
             try? await Task.sleep(nanoseconds: 600_000_000)

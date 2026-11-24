@@ -89,7 +89,40 @@ final class VodClient {
     // MARK: - 请求
 
     private func fetchJSON(_ api: String, query: [String: String]) async throws -> [String: Any] {
-        guard var comp = URLComponents(string: api.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+        let candidates = Self.apiCandidates(api)
+        var lastError: Error = ClientError.parseFailed
+        for candidate in candidates {
+            do {
+                return try await requestJSON(candidate, query: query)
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError
+    }
+
+    /// 请求候选：先用原始地址；若只是裸域名 / 站点首页，再补 `api.php/provide/vod/` 试一次
+    private static func apiCandidates(_ api: String) -> [String] {
+        let trimmed = api.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        var result = [trimmed]
+        if let supplemented = supplementAPI(trimmed), !result.contains(supplemented) {
+            result.append(supplemented)
+        }
+        return result
+    }
+
+    /// 已带接口路径则不补；否则按 scheme://host 拼标准 CMS V10 接口根路径
+    private static func supplementAPI(_ api: String) -> String? {
+        guard var comp = URLComponents(string: api), let host = comp.host, !host.isEmpty else { return nil }
+        if comp.path.contains("api.php") || comp.path.contains("provide/vod") { return nil }
+        comp.path = "/api.php/provide/vod/"
+        comp.queryItems = nil
+        return comp.url?.absoluteString
+    }
+
+    private func requestJSON(_ api: String, query: [String: String]) async throws -> [String: Any] {
+        guard var comp = URLComponents(string: api) else {
             throw ClientError.badURL
         }
         var items = comp.queryItems ?? []
