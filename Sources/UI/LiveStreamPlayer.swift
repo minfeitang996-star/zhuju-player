@@ -61,6 +61,9 @@ final class LivePlayerController: ObservableObject {
         timer?.invalidate()
         timer = nil
         failedWork?.cancel()
+        // 先摘走渲染目标和回调，再停播：避免停播后最后一帧残留在旧 drawable 上，退出时叠到列表页
+        player.drawable = nil
+        player.delegate = nil
         player.stop()
     }
 
@@ -227,6 +230,7 @@ struct LiveStreamPlayer: View {
         VStack {
             HStack(spacing: 12) {
                 Button {
+                    controller.stop()
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")

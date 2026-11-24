@@ -116,6 +116,17 @@ final class VLCPlayerContainer: UIView {
         walkView(inner)
     }
 
+    /// 视图销毁前清掉 VLC 后插进来的渲染子视图 / 子层和最后一帧，避免退出后残影叠在上一层页面
+    func teardown() {
+        inner.subviews.forEach { $0.removeFromSuperview() }
+        inner.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        inner.layer.contents = nil
+        layer.sublayers?.forEach {
+            if $0 !== inner.layer { $0.removeFromSuperlayer() }
+        }
+        layer.contents = nil
+    }
+
     /// 容器 bounds 在首拍 / 旋转过渡期间可能是零或竖屏旧值，拿窗口、再拿屏幕尺寸兜底
     private func fallbackSize() -> CGSize {
         if let w = window, w.bounds.width > 1, w.bounds.height > 1 { return w.bounds.size }
@@ -245,6 +256,11 @@ struct VLCVideoView: UIViewRepresentable {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { relayout(uiView) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { relayout(uiView) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { relayout(uiView) }
+    }
+
+    static func dismantleUIView(_ uiView: VLCPlayerContainer, coordinator: Coordinator) {
+        coordinator.view = nil
+        uiView.teardown()
     }
 
     /// 拉伸模式：把引擎输出画面比例设成当前屏幕区域比例，让 VLC 直接把画面拉满 drawable，
