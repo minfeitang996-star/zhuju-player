@@ -41,6 +41,9 @@ struct LiveSourceView: View {
     @State private var refreshError: String?
     @State private var renameTarget: LivePlaylist?
     @State private var renameText = ""
+    @State private var multiSelect = false
+    @State private var selectedIDs: Set<UUID> = []
+    @State private var showBulkDelete = false
 
     private var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -78,6 +81,16 @@ struct LiveSourceView: View {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
+    /// 可被删除的配置：内置示例不可删
+    private var selectablePlaylists: [LivePlaylist] {
+        store.playlists.filter { !$0.isBuiltin }
+    }
+
+    private func exitMultiSelect() {
+        multiSelect = false
+        selectedIDs.removeAll()
+    }
+
     var body: some View {
         NavigationView {
             mainContent
@@ -111,6 +124,15 @@ struct LiveSourceView: View {
                 }
                 renameTarget = nil
             }
+        }
+        .alert("删除选中的 \(selectedIDs.count) 套配置？", isPresented: $showBulkDelete) {
+            Button("取消", role: .cancel) { }
+            Button("删除", role: .destructive) {
+                store.deletePlaylists(selectedIDs)
+                exitMultiSelect()
+            }
+        } message: {
+            Text("配置里的频道会一并移除，删除后不可恢复。")
         }
     }
 
@@ -170,10 +192,22 @@ struct LiveSourceView: View {
             }
             .disabled(store.activePlaylist == nil)
         case .playlists:
-            Button {
-                showAddPlaylist = true
-            } label: {
-                Image(systemName: "plus.circle.fill")
+            if multiSelect {
+                Button("完成") { exitMultiSelect() }
+                    .foregroundColor(theme.accent)
+            } else {
+                HStack(spacing: 16) {
+                    Button {
+                        showAddPlaylist = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                    Button {
+                        multiSelect = true
+                    } label: {
+                        Image(systemName: "checkmark.circle")
+                    }
+                }
             }
         case .favorites:
             EmptyView()
@@ -183,27 +217,70 @@ struct LiveSourceView: View {
     // MARK: - 底部 Tab
 
     private var bottomTabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(Tab.allCases, id: \.self) { item in
-                Button {
-                    tab = item
-                    currentFolder = nil
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: item.icon)
-                            .font(.system(size: 20, weight: .semibold))
-                        Text(item.title)
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .foregroundColor(tab == item ? theme.accent : .white.opacity(0.45))
-                }
-                .buttonStyle(HomeFolderStyle(accent: theme.accent))
+        VStack(spacing: 0) {
+            if multiSelect && tab == .playlists {
+                bulkDeleteBar
             }
+            HStack(spacing: 0) {
+                ForEach(Tab.allCases, id: \.self) { item in
+                    Button {
+                        tab = item
+                        currentFolder = nil
+                        exitMultiSelect()
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: item.icon)
+                                .font(.system(size: 20, weight: .semibold))
+                            Text(item.title)
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(tab == item ? theme.accent : .white.opacity(0.45))
+                    }
+                    .buttonStyle(HomeFolderStyle(accent: theme.accent))
+                }
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 6)
         }
-        .padding(.top, 10)
-        .padding(.bottom, 6)
         .background(.ultraThinMaterial)
+    }
+
+    private var allSelected: Bool {
+        !selectablePlaylists.isEmpty
+            && selectedIDs.count == selectablePlaylists.count
+    }
+
+    private var bulkDeleteBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                if allSelected {
+                    selectedIDs.removeAll()
+                } else {
+                    selectedIDs = Set(selectablePlaylists.map { $0.id })
+                }
+            } label: {
+                Text(allSelected ? "取消全选" : "全选")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.accent)
+            }
+
+            Spacer()
+
+            Text("已选 \(selectedIDs.count) 套")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.5))
+
+            Button(role: .destructive) {
+                showBulkDelete = true
+            } label: {
+                Label("删除", systemImage: "trash")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .disabled(selectedIDs.isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     // MARK: - 频道 Tab
@@ -363,15 +440,21 @@ struct LiveSourceView: View {
 
     private func playlistRow(_ pl: LivePlaylist) -> some View {
         let isActive = store.activePlaylist?.id == pl.id
+        let isSelected = selectedIDs.contains(pl.id)
+        let selectable = !pl.isBuiltin
+        let highlight = multiSelect ? isSelected : isActive
         return Button {
-            store.selectPlaylist(pl.id)
-            tab = .channels
-            currentFolder = nil
+            if multiSelect {
+                guard selectable else { return }
+                if isSelected { selectedIDs.remove(pl.id) } else { selectedIDs.insert(pl.id) }
+            } else {
+                store.selectPlaylist(pl.id)
+                tab = .channels
+                currentFolder = nil
+            }
         } label: {
             HStack(spacing: 14) {
-                Image(systemName: isActive ? "record.circle.fill" : "circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(isActive ? theme.accent : .white.opacity(0.25))
+                leadingIcon(isActive: isActive, isSelected: isSelected, selectable: selectable)
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(pl.title)
@@ -396,41 +479,51 @@ struct LiveSourceView: View {
 
                 Spacer(minLength: 0)
 
-                Menu {
-                    if pl.feedURL != nil {
-                        Button {
-                            Task { await refresh(pl) }
-                        } label: {
-                            Label("刷新源", systemImage: "arrow.clockwise")
+                if multiSelect {
+                    if selectable {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(isSelected ? theme.accent : .white.opacity(0.25))
+                            .frame(width: 34, height: 34)
+                    }
+                } else {
+                    Menu {
+                        if pl.feedURL != nil {
+                            Button {
+                                Task { await refresh(pl) }
+                            } label: {
+                                Label("刷新源", systemImage: "arrow.clockwise")
+                            }
                         }
-                    }
-                    Button {
-                        renameTarget = pl
-                        renameText = pl.title
+                        Button {
+                            renameTarget = pl
+                            renameText = pl.title
+                        } label: {
+                            Label("重命名", systemImage: "pencil")
+                        }
+                        .disabled(pl.isBuiltin)
+                        Button(role: .destructive) {
+                            store.deletePlaylist(pl.id)
+                        } label: {
+                            Label("删除配置", systemImage: "trash")
+                        }
+                        .disabled(pl.isBuiltin)
                     } label: {
-                        Label("重命名", systemImage: "pencil")
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white.opacity(0.4))
+                            .frame(width: 34, height: 34)
                     }
-                    .disabled(pl.isBuiltin)
-                    Button(role: .destructive) {
-                        store.deletePlaylist(pl.id)
-                    } label: {
-                        Label("删除配置", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white.opacity(0.4))
-                        .frame(width: 34, height: 34)
                 }
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(isActive ? 0.12 : 0.08))
+                    .fill(Color.white.opacity(highlight ? 0.12 : 0.08))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(isActive ? theme.accent.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1)
+                    .stroke(highlight ? theme.accent.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1)
             )
             .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 4)
             .contentShape(Rectangle())
@@ -439,6 +532,19 @@ struct LiveSourceView: View {
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 12))
         .listRowBackground(Color.clear)
+    }
+
+    @ViewBuilder
+    private func leadingIcon(isActive: Bool, isSelected: Bool, selectable: Bool) -> some View {
+        if multiSelect {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 18))
+                .foregroundColor(isSelected ? theme.accent : (selectable ? .white.opacity(0.25) : .white.opacity(0.12)))
+        } else {
+            Image(systemName: isActive ? "record.circle.fill" : "circle")
+                .font(.system(size: 18))
+                .foregroundColor(isActive ? theme.accent : .white.opacity(0.25))
+        }
     }
 
     private func refresh(_ pl: LivePlaylist) async {

@@ -327,6 +327,17 @@ final class LiveSourceStore: ObservableObject {
         savePlaylists()
     }
 
+    /// 批量删除多套配置；若当前激活配置被删，自动回退到第一套
+    func deletePlaylists(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        playlists.removeAll { ids.contains($0.id) }
+        if let activePlaylistID, !playlists.contains(where: { $0.id == activePlaylistID }) {
+            activePlaylistID = playlists.first?.id
+            saveActive()
+        }
+        savePlaylists()
+    }
+
     func renamePlaylist(_ id: UUID, title: String) {
         guard let idx = playlists.firstIndex(where: { $0.id == id }) else { return }
         playlists[idx].title = title.trimmingCharacters(in: .whitespacesAndNewlines)
