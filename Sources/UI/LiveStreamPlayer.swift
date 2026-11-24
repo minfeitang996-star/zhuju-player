@@ -83,6 +83,7 @@ struct LiveStreamPlayer: View {
     let channel: LiveChannel
 
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = LiveSourceStore.shared
     @AppStorage("themeID") private var themeID: String = "gold"
     private var theme: AppTheme { AppTheme.current(themeID) }
 
@@ -154,6 +155,7 @@ struct LiveStreamPlayer: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { OrientationHelper.apply(.landscapeRight) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { OrientationHelper.apply(.landscapeRight) }
             if let source = currentSource {
+                store.recordHistory(name: channel.name, url: source.url, label: source.label)
                 controller.open(source.url)
             } else {
                 controller.failed = true
@@ -419,9 +421,11 @@ struct LiveStreamPlayer: View {
         // 点当前正在播的这条不重启媒体，否则画面会黑一下
         if index == sourceIndex && (controller.playing || controller.loading) { return }
         sourceIndex = index
+        let picked = channel.sources[index]
+        store.recordHistory(name: channel.name, url: picked.url, label: picked.label)
         controller.failed = false
         controller.loading = true
-        controller.open(channel.sources[index].url)
+        controller.open(picked.url)
         layoutTick += 1
     }
 

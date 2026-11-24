@@ -15,11 +15,13 @@ struct LiveSourceView: View {
     @State private var selecting = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var showBatchDelete = false
+    @State private var showClearHistory = false
     @State private var searchText = ""
 
-    /// 按分类分组：央视、卫视排前面，其他地区按名称排，其他兜底放最后
+    /// 按分类分组：央视、卫视排前面，其他地区按名称排，其他兜底放最后；手动添加的连接单独进「我的连接」
     private var grouped: [FolderGroup] {
-        let dict = Dictionary(grouping: store.channels) { $0.category }
+        let pool = store.channels.filter { $0.kind != "manual" }
+        let dict = Dictionary(grouping: pool) { $0.category }
         let preferred = ["央视", "卫视"]
         let keys = dict.keys.sorted { a, b in
             if a == b { return false }
@@ -62,12 +64,12 @@ struct LiveSourceView: View {
             ZStack {
                 theme.background.ignoresSafeArea()
 
-                if store.channels.isEmpty {
+                if store.channels.isEmpty && store.history.isEmpty {
                     emptyState
                 } else if isSearching {
                     searchList
                 } else if currentFolder == nil {
-                    folderList
+                    homeList
                 } else {
                     channelList
                 }
@@ -129,29 +131,143 @@ struct LiveSourceView: View {
             } message: {
                 Text("删掉的直播源不能恢复，需要重新添加。")
             }
+            .alert("清空最近看过的记录？", isPresented: $showClearHistory) {
+                Button("取消", role: .cancel) { }
+                Button("清空", role: .destructive) { store.clearHistory() }
+            } message: {
+                Text("只清除观看记录，不会删掉已添加的直播源。")
+            }
         }
         .navigationViewStyle(.stack)
         .tint(theme.accent)
     }
 
-    // MARK: - 文件夹（分类）列表
+    // MARK: - 首页：最近看过 / 我的连接 / 全部频道
 
-    private var folderList: some View {
+    private var homeList: some View {
         List {
-            ForEach(grouped) { group in
-                Button {
-                    currentFolder = group.name
-                } label: {
-                    folderRow(name: group.name, count: group.items.count)
+            if !store.history.isEmpty {
+                Section {
+                    ForEach(store.history) { item in
+                        historyRow(item)
+                    }
+                } header: {
+                    sectionHeader("最近看过", trailing: "清空") {
+                        showClearHistory = true
+                    }
                 }
-                .buttonStyle(HomeFolderStyle(accent: theme.accent))
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                .listRowBackground(Color.clear)
+            }
+
+            if !store.manualChannels.isEmpty {
+                Section {
+                    ForEach(store.manualChannels) { channel in
+                        channelRowView(channel)
+                    }
+                } header: {
+                    sectionHeader("我的连接", trailing: nil)
+                }
+            }
+
+            Section {
+                ForEach(grouped) { group in
+                    Button {
+                        currentFolder = group.name
+                    } label: {
+                        folderRow(name: group.name, count: group.items.count)
+                    }
+                    .buttonStyle(HomeFolderStyle(accent: theme.accent))
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color.clear)
+                }
+            } header: {
+                sectionHeader("全部频道", trailing: nil)
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    private func sectionHeader(_ title: String, trailing: String?, action: (() -> Void)? = nil) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+            Spacer(minLength: 0)
+            if let trailing, let action {
+                Button(trailing) { action() }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.accent)
+            }
+        }
+        .padding(.horizontal, 4)
+        .textCase(nil)
+    }
+
+    private func channel(from item: LiveHistoryItem) -> LiveChannel {
+        LiveChannel(
+            id: UUID(),
+            name: item.name,
+            sources: [LiveSource(id: UUID(), label: item.label, url: item.url)],
+            group: "历史",
+            kind: "manual"
+        )
+    }
+
+    private func historyRow(_ item: LiveHistoryItem) -> some View {
+        Button {
+            active = channel(from: item)
+        } label: {
+            HStack(spacing: 14) {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(theme.accent.opacity(0.16))
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(theme.accent)
+                    )
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(item.url)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.45))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(HomeFolderStyle(accent: theme.accent))
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowBackground(Color.clear)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                store.deleteHistory(item.id)
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
     }
 
     private func folderRow(name: String, count: Int) -> some View {
@@ -621,6 +737,22 @@ private struct LiveSourceForm: View {
                 .padding(14)
                 .background(Color.white.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            // 预设公开订阅：选一个自动填地址，再点「拉取并导入」
+            HStack(spacing: 10) {
+                ForEach(LiveSourceStore.presetFeeds.indices, id: \.self) { i in
+                    let feed = LiveSourceStore.presetFeeds[i]
+                    Button(feed.title) {
+                        m3uURL = feed.url
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.10))
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+                }
+            }
 
             Button {
                 Task { await importM3U() }
