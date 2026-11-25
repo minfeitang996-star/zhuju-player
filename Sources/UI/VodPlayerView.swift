@@ -100,7 +100,8 @@ struct VodPlayerView: View {
                 if controller.loading {
                     loadingOverlay
                 }
-                if controller.failed {
+                // 已经拿到时长说明片子能播，别因为拖动时暂停被 10 秒判失败误伤
+                if controller.failed, lengthSeconds <= 1 {
                     failedOverlay
                 }
                 if showControls {
