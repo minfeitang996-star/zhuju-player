@@ -110,7 +110,10 @@ struct LiveSourceView: View {
         }
         .sheet(item: $editing) { ChannelForm(mode: .edit, existing: $0) }
         .sheet(isPresented: $showAddPlaylist) { PlaylistForm() }
-        .fullScreenCover(item: $active, onDismiss: { OrientationHelper.apply(.portrait) }) {
+        .fullScreenCover(item: $active, onDismiss: {
+            active = nil
+            OrientationHelper.apply(.portrait)
+        }) {
             LiveStreamPlayer(channel: $0)
         }
         .alert("清空最近看过的记录？", isPresented: $showClearHistory) {

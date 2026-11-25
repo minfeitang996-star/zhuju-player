@@ -485,6 +485,8 @@ struct LiveStreamPlayer: View {
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
 
+        dumpViewTree("after-exit")
+
         func clearLayers(_ layer: CALayer) {
             if layer.contents != nil { layer.contents = nil }
             layer.sublayers?.forEach(clearLayers)
@@ -501,5 +503,29 @@ struct LiveStreamPlayer: View {
             }
         }
         windows.forEach { walk($0) }
+    }
+
+    /// 把当前窗口 / 控制器视图树写进 boot.txt，定位黑屏退出后残留黑块挂在哪一层、是什么类型、frame 多少
+    private static func dumpViewTree(_ tag: String) {
+        Boot.mark("LIVE-PURGE \(tag)")
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        for scene in scenes {
+            for window in scene.windows {
+                Boot.mark("  window \(type(of: window)) frame \(window.frame)")
+                var vc: UIViewController? = window.rootViewController
+                var depth = 0
+                while let current = vc {
+                    let v = current.view
+                    let frame = v.map { String(format: "%.0f,%.0f %.0fx%.0f", $0.frame.origin.x, $0.frame.origin.y, $0.frame.width, $0.frame.height) } ?? "-"
+                    Boot.mark("    vc[\(depth)] \(type(of: current)) frame \(frame) sub \(v?.subviews.count ?? 0)")
+                    vc = current.presentedViewController
+                    depth += 1
+                }
+                for sub in window.subviews {
+                    let frame = String(format: "%.0f,%.0f %.0fx%.0f", sub.frame.origin.x, sub.frame.origin.y, sub.frame.width, sub.frame.height)
+                    Boot.mark("    win-sub \(type(of: sub)) frame \(frame) sub \(sub.subviews.count)")
+                }
+            }
+        }
     }
 }
