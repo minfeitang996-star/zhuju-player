@@ -47,7 +47,8 @@ struct VodPlayerView: View {
     @State private var dragAxis: String?
     @State private var scrubStart: Double = 0
     @State private var scrubTarget: Double = 0
-    @State private var scrubWasPlaying = false
+    /// 拖动开始那一刻是否在播（只用于稳定按键图标，不参与暂停/恢复）
+    @State private var scrubWasPlaying = true
     @State private var isScrubbing = false
     @State private var lastScrubSeekAt: Double = 0
     @State private var lastScrubSeekTarget: Double = 0
@@ -192,6 +193,12 @@ struct VodPlayerView: View {
         return String(format: "%02d:%02d", m, s)
     }
 
+    /// 拖动定位期间锁住图标，避免定位瞬间引擎状态闪动带得按键一起跳
+    private var playIconName: String {
+        let playing = isScrubbing ? scrubWasPlaying : controller.playing
+        return playing ? "pause.fill" : "play.fill"
+    }
+
     // MARK: - 画面横滑快进（与本地播放器同一套手感）
 
     private func handleDragChanged(_ value: DragGesture.Value, in size: CGSize) {
@@ -222,8 +229,7 @@ struct VodPlayerView: View {
         lastScrubSeekAt = 0
         lastScrubSeekTarget = currentSeconds
         isScrubbing = true
-        // 拖动期间先暂停，省得边解码边跳帧
-        controller.player.pause()
+        // 不暂停：边播边改位置，避免暂停 / 恢复那一下的顿感和按键图标跳变
         hudText = scrubHUD()
     }
 
@@ -234,8 +240,12 @@ struct VodPlayerView: View {
         let target = min(max(0.2, scrubStart + seconds), lengthSeconds - 0.4)
         scrubTarget = target
 
+        // 拖动中限频定位：第一下小位移就立刻响应，之后拉开间隔，避免把在线解码队列打满
         let now = Date().timeIntervalSince1970
-        if now - lastScrubSeekAt >= 0.22, abs(target - lastScrubSeekTarget) >= 3.0 {
+        let first = lastScrubSeekAt == 0
+        let interval = first ? 0 : 0.4
+        let minDelta = first ? 2.0 : 6.0
+        if now - lastScrubSeekAt >= interval, abs(target - lastScrubSeekTarget) >= minDelta {
             lastScrubSeekAt = now
             lastScrubSeekTarget = target
             controller.player.position = Float(target / lengthSeconds)
@@ -259,12 +269,6 @@ struct VodPlayerView: View {
             controller.player.position = Float(scrubTarget / lengthSeconds)
             lastScrubSeekTarget = scrubTarget
             currentSeconds = scrubTarget
-        }
-        if scrubWasPlaying {
-            // 定位落地后再恢复播放，避免互相抢解码
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [controller] in
-                controller.player.play()
-            }
         }
         if abs(delta) < 1 {
             hudText = nil
@@ -470,7 +474,7 @@ struct VodPlayerView: View {
                 Button {
                     controller.toggle()
                 } label: {
-                    Image(systemName: controller.playing ? "pause.fill" : "play.fill")
+                    Image(systemName: playIconName)
                         .font(.system(size: 22))
                         .foregroundColor(.white)
                         .frame(width: 52, height: 52)
