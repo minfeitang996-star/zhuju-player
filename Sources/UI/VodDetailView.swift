@@ -233,7 +233,7 @@ struct VodDetailView: View {
 
         case .downloading:
             Button {
-                downloads.cancel(episode.url)
+                downloads.pause(episode.url)
             } label: {
                 HStack(spacing: 4) {
                     ProgressView()
@@ -245,6 +245,16 @@ struct VodDetailView: View {
                             .foregroundColor(.white.opacity(0.7))
                     }
                 }
+            }
+            .buttonStyle(.plain)
+
+        case .paused:
+            Button {
+                downloads.resume(episode.url)
+            } label: {
+                Image(systemName: "play.circle")
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.accent)
             }
             .buttonStyle(.plain)
 

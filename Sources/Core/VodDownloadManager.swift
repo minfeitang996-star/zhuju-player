@@ -359,7 +359,7 @@ final class VodDownloadManager: ObservableObject {
         do {
             try handle.write(contentsOf: data)
             ctx.received += Int64(data.count)
-            handle.close()
+            try handle.close()
             singleResume[key] = ctx
 
             let dest = finalDestination(baseName: ctx.baseName, ext: ctx.ext,

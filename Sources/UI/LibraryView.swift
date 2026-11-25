@@ -781,6 +781,7 @@ struct LibraryView: View {
         let done = downloads.allRecords.filter { downloads.fileExists($0) }.count
         let active = downloads.tasks.values.contains {
             if case .downloading = $0.status { return true }
+            if case .paused = $0.status { return true }
             return false
         }
         if active { return "下载中 · 已下载 \(done)" }
