@@ -40,6 +40,11 @@ struct LiveSourceView: View {
     @State private var searchText = ""
     @State private var showClearHistory = false
     @State private var refreshError: String?
+    @State private var refreshingAll = false
+    @State private var showRefreshReport = false
+    @State private var refreshSuccess = 0
+    @State private var refreshFailed = 0
+    @State private var refreshFailures: [String] = []
     @State private var renameTarget: LivePlaylist?
     @State private var renameText = ""
     @State private var multiSelect = false
@@ -115,6 +120,15 @@ struct LiveSourceView: View {
             Button("知道了") { refreshError = nil }
         } message: {
             Text(refreshError ?? "")
+        }
+        .alert("刷新完成", isPresented: $showRefreshReport) {
+            Button("知道了") { showRefreshReport = false }
+        } message: {
+            if refreshFailed > 0 {
+                Text("成功 \(refreshSuccess) 套，失败 \(refreshFailed) 套：\(refreshFailures.joined(separator: "、"))")
+            } else {
+                Text("全部 \(refreshSuccess) 套配置已刷新完成。")
+            }
         }
         .alert("重命名配置", isPresented: .constant(renameTarget != nil)) {
             TextField("配置名称", text: $renameText)
@@ -208,6 +222,16 @@ struct LiveSourceView: View {
                     } label: {
                         Image(systemName: "checkmark.circle")
                     }
+                    Button {
+                        Task { await refreshAll() }
+                    } label: {
+                        if refreshingAll {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise.circle")
+                        }
+                    }
+                    .disabled(refreshingAll)
                 }
             }
         case .favorites:
@@ -554,6 +578,17 @@ struct LiveSourceView: View {
         } catch {
             refreshError = error.localizedDescription
         }
+    }
+
+    /// 一键刷新全部带订阅地址的配置，完成后弹出成功 / 失败汇总
+    private func refreshAll() async {
+        refreshingAll = true
+        let report = await store.refreshAllPlaylists()
+        refreshingAll = false
+        refreshSuccess = report.success
+        refreshFailed = report.failed
+        refreshFailures = report.failures
+        showRefreshReport = true
     }
 
     private func timeText(_ pl: LivePlaylist) -> String {
@@ -1141,25 +1176,7 @@ private struct PlaylistForm: View {
         importing = true
         errorText = nil
         do {
-            guard let url = URL(string: feedURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-                throw NSError(domain: "live", code: -1, userInfo: [NSLocalizedDescriptionKey: "地址格式不对"])
-            }
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                throw NSError(domain: "live", code: -2, userInfo: [NSLocalizedDescriptionKey: "列表返回异常"])
-            }
-            let text = String(data: data, encoding: .utf8)
-                ?? String(data: data, encoding: .isoLatin1)
-                ?? ""
-            let entries = M3UParser.parse(text)
-            guard !entries.isEmpty else {
-                throw NSError(domain: "live", code: -3, userInfo: [NSLocalizedDescriptionKey: "没解析到可用频道"])
-            }
-            let channels = entries.map {
-                LiveChannel(id: UUID(), name: $0.name,
-                            sources: [LiveSource(id: UUID(), label: "一源", url: $0.url)],
-                            group: $0.group, kind: "imported")
-            }
+            let channels = try await store.fetchChannels(feedURL: feedURL)
             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             let fallbackTitle = trimmedTitle.isEmpty ? "订阅配置" : trimmedTitle
             await MainActor.run {
@@ -1184,18 +1201,11 @@ private struct PlaylistForm: View {
             errorText = "读取本地文件失败"
             return
         }
-        let text = String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .isoLatin1)
-            ?? ""
-        let entries = M3UParser.parse(text)
-        guard !entries.isEmpty else {
+        let text = LiveSourceStore.decodeText(data)
+        let channels = store.channels(fromText: text)
+        guard !channels.isEmpty else {
             errorText = "文件里没解析到可用频道"
             return
-        }
-        let channels = entries.map {
-            LiveChannel(id: UUID(), name: $0.name,
-                        sources: [LiveSource(id: UUID(), label: "一源", url: $0.url)],
-                        group: $0.group, kind: "imported")
         }
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         store.addPlaylist(title: trimmedTitle.isEmpty ? "本地导入" : trimmedTitle,

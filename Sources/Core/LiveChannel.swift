@@ -347,31 +347,104 @@ final class LiveSourceStore: ObservableObject {
     /// 按订阅地址重新拉取并替换整套频道
     func refreshPlaylist(_ id: UUID) async throws {
         guard let idx = playlists.firstIndex(where: { $0.id == id }),
-              let feedURL = playlists[idx].feedURL,
-              let url = URL(string: feedURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+              let feedURL = playlists[idx].feedURL else {
             throw NSError(domain: "live", code: -1, userInfo: [NSLocalizedDescriptionKey: "这个配置没有订阅地址"])
         }
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw NSError(domain: "live", code: -2, userInfo: [NSLocalizedDescriptionKey: "列表返回异常"])
-        }
-        let text = String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .isoLatin1)
-            ?? ""
-        let entries = M3UParser.parse(text)
-        guard !entries.isEmpty else {
-            throw NSError(domain: "live", code: -3, userInfo: [NSLocalizedDescriptionKey: "没解析到可用频道"])
-        }
-        let channels = entries.map {
-            LiveChannel(id: UUID(), name: $0.name,
-                        sources: [LiveSource(id: UUID(), label: "一源", url: $0.url)],
-                        group: $0.group, kind: "imported")
-        }
+        let channels = try await fetchChannels(feedURL: feedURL)
         await MainActor.run {
             playlists[idx].channels = channels
             playlists[idx].updatedAt = Date()
             savePlaylists()
         }
+    }
+
+    /// 拉取订阅文本并解析成频道列表（带超时与失败重试，相对路径按订阅地址补全）
+    func fetchChannels(feedURL: String) async throws -> [LiveChannel] {
+        let text = try await fetchFeedText(feedURL)
+        let entries = M3UParser.parse(text, baseURL: feedURL)
+        guard !entries.isEmpty else {
+            throw NSError(domain: "live", code: -3, userInfo: [NSLocalizedDescriptionKey: "没解析到可用频道"])
+        }
+        return channels(from: entries)
+    }
+
+    /// 刷新全部带订阅地址的配置，返回成功 / 失败汇总
+    func refreshAllPlaylists() async -> (success: Int, failed: Int, failures: [String]) {
+        var success = 0
+        var failed = 0
+        var failures: [String] = []
+        for pl in playlists where pl.feedURL != nil {
+            do {
+                try await refreshPlaylist(pl.id)
+                success += 1
+            } catch {
+                failed += 1
+                failures.append(pl.title)
+            }
+        }
+        return (success, failed, failures)
+    }
+
+    /// 本地文件或已有文本解析成频道（无网络请求）
+    func channels(fromText text: String, baseURL: String? = nil) -> [LiveChannel] {
+        channels(from: M3UParser.parse(text, baseURL: baseURL))
+    }
+
+    private func channels(from entries: [M3UParser.Entry]) -> [LiveChannel] {
+        entries.map { entry in
+            LiveChannel(id: UUID(), name: entry.name,
+                        sources: entry.urls.enumerated().map { i, u in
+                            LiveSource(id: UUID(), label: Self.sourceLabel(index: i), url: u)
+                        },
+                        group: entry.group, kind: "imported")
+        }
+    }
+
+    /// 带超时与退避重试的订阅拉取；4xx 直接失败不重试，5xx / 网络抖动重试两次
+    private func fetchFeedText(_ feedURL: String) async throws -> String {
+        let trimmed = feedURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed) else {
+            throw NSError(domain: "live", code: -1, userInfo: [NSLocalizedDescriptionKey: "地址格式不对"])
+        }
+        var lastError: Error = NSError(domain: "live", code: -4,
+                                       userInfo: [NSLocalizedDescriptionKey: "列表拉取失败"])
+        for attempt in 0..<3 {
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 20
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw NSError(domain: "live", code: -2, userInfo: [NSLocalizedDescriptionKey: "列表返回异常"])
+                }
+                if (400..<500).contains(http.statusCode) {
+                    throw NSError(domain: "live", code: -5,
+                                  userInfo: [NSLocalizedDescriptionKey: "列表返回异常（\(http.statusCode)）"])
+                }
+                guard http.statusCode == 200 else {
+                    throw NSError(domain: "live", code: -2,
+                                  userInfo: [NSLocalizedDescriptionKey: "列表返回异常（\(http.statusCode)）"])
+                }
+                return Self.decodeText(data)
+            } catch {
+                lastError = error
+                let ns = error as NSError
+                // 4xx 不重试，直接抛出
+                if ns.code == -5 { throw error }
+                if attempt < 2 {
+                    try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 400_000_000)
+                }
+            }
+        }
+        throw lastError
+    }
+
+    /// 订阅文本解码：UTF-8 优先，其次 GB18030（国内老订阅常见），最后 Latin1 兜底
+    static func decodeText(_ data: Data) -> String {
+        if let s = String(data: data, encoding: .utf8) { return s }
+        let gbkEncoding = String.Encoding(rawValue:
+            CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(rawValue: 0x04000130)))
+        if let s = String(data: data, encoding: gbkEncoding) { return s }
+        return String(data: data, encoding: .isoLatin1) ?? ""
     }
 
     // MARK: - 频道操作（在所属配置内）
@@ -521,8 +594,10 @@ final class LiveSourceStore: ObservableObject {
 
     static func isValidURL(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.contains("://") else { return false }
-        return URLComponents(string: trimmed)?.url != nil
+        guard let schemeEnd = trimmed.firstIndex(of: ":"),
+              trimmed[schemeEnd...].hasPrefix("://") else { return false }
+        let rest = trimmed[trimmed.index(after: schemeEnd)...].dropFirst(2)
+        return !rest.isEmpty
     }
 
     private static func sourceLabel(index: Int) -> String {
@@ -538,16 +613,21 @@ final class LiveSourceStore: ObservableObject {
     ]
 }
 
-/// m3u / m3u8 / txt 播放列表解析：只取频道名、分组和流地址，不做网络请求
+/// m3u / m3u8 / txt 播放列表解析：取频道名、分组和全部流地址，不做网络请求
 enum M3UParser {
 
     struct Entry: Equatable {
         let name: String
-        let url: String
+        let urls: [String]
         let group: String?
+        var url: String { urls.first ?? "" }
     }
 
-    static func parse(_ text: String) -> [Entry] {
+    /// 流地址正则：协议名放宽为常见 scheme；地址内部允许逗号、括号、#、&、= 等字符，
+    /// 只在空白、竖线、中文逗号 / 顿号 / 右中括号处切断。
+    private static let urlPattern = #"[a-z][a-z0-9+.-]*://[^\s|，、】]+"#
+
+    static func parse(_ text: String, baseURL: String? = nil) -> [Entry] {
         var result: [Entry] = []
         var pendingTitle: String?
         var pendingGroup: String?
@@ -564,23 +644,23 @@ enum M3UParser {
                 } else {
                     pendingTitle = nil
                 }
-                if let range = line.range(of: "group-title=\"") {
-                    let rest = line[range.upperBound...]
-                    if let end = rest.firstIndex(of: "\"") {
-                        pendingGroup = String(rest[..<end])
-                    }
-                } else {
-                    pendingGroup = nil
-                }
+                pendingGroup = Self.extractGroup(line)
+                continue
+            }
+
+            if line.hasPrefix("#EXTGRP:") {
+                let g = line.dropFirst("#EXTGRP:".count)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                pendingGroup = g.isEmpty ? nil : g
                 continue
             }
 
             if line.hasPrefix("#") { continue }
 
-            // txt 订阅格式：名称与地址之间可用逗号、#、竖线、空格分隔；也支持整行只有地址
-            if let pair = Self.splitNameURL(line) {
-                let name = pair.name.isEmpty ? (pendingTitle ?? pair.url) : pair.name
-                result.append(Entry(name: name, url: pair.url, group: pendingGroup))
+            let urls = Self.extractURLs(line, baseURL: baseURL)
+            if !urls.isEmpty {
+                let name = pendingTitle ?? Self.nameBeforeFirstURL(line, urls: urls)
+                result.append(Entry(name: name, urls: urls, group: pendingGroup))
             }
             pendingTitle = nil
             pendingGroup = nil
@@ -588,17 +668,48 @@ enum M3UParser {
         return result
     }
 
-    /// 从一行文本里提取流地址，并把地址前面的文字作为频道名；分隔符支持逗号、#、竖线、空白
-    private static func splitNameURL(_ line: String) -> (name: String, url: String)? {
-        let pattern = #"(https?|rtsp|rtmp|udp|rtp)://[^\s,，、|】)]+"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+    /// 提取分组标题：兼容 group-title / tvg-group，双引号或单引号
+    private static func extractGroup(_ line: String) -> String? {
+        for key in ["group-title=\"", "group-title='", "tvg-group=\"", "tvg-group='"] {
+            if let range = line.range(of: key) {
+                let rest = line[range.upperBound...]
+                let quote = key.last!
+                if let end = rest.firstIndex(of: quote) {
+                    let g = String(rest[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    return g.isEmpty ? nil : g
+                }
+            }
+        }
+        return nil
+    }
+
+    /// 提取一行内全部流地址；相对路径按 baseURL 补全；过滤校验不通过与重复的地址
+    private static func extractURLs(_ line: String, baseURL: String?) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: urlPattern, options: .caseInsensitive) else { return [] }
         let range = NSRange(line.startIndex..., in: line)
-        guard let match = regex.firstMatch(in: line, range: range),
-              let r = Range(match.range, in: line) else { return nil }
-        let url = String(line[r])
-        guard LiveSourceStore.isValidURL(url) else { return nil }
-        let prefix = String(line[..<r.lowerBound])
-        let name = prefix.trimmingCharacters(in: CharacterSet(charactersIn: " ,，、#|\t"))
-        return (name, url)
+        var urls: [String] = []
+        regex.enumerateMatches(in: line, range: range) { match, _, _ in
+            guard let match, let r = Range(match.range, in: line) else { return }
+            var raw = String(line[r])
+                .trimmingCharacters(in: CharacterSet(charactersIn: "),，、】\t "))
+            if let base = baseURL,
+               URL(string: raw)?.scheme == nil,
+               let baseObj = URL(string: base.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                raw = URL(string: raw, relativeTo: baseObj)?.absoluteString ?? raw
+            }
+            if LiveSourceStore.isValidURL(raw), !urls.contains(raw) {
+                urls.append(raw)
+            }
+        }
+        return urls
+    }
+
+    /// 取第一个地址之前的文字作为频道名（txt 格式）
+    private static func nameBeforeFirstURL(_ line: String, urls: [String]) -> String {
+        guard let first = urls.first, let range = line.range(of: first) else {
+            return line.trimmingCharacters(in: CharacterSet(charactersIn: " ,，、#|\t"))
+        }
+        let prefix = String(line[..<range.lowerBound])
+        return prefix.trimmingCharacters(in: CharacterSet(charactersIn: " ,，、#|\t"))
     }
 }
