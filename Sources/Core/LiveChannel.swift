@@ -442,7 +442,7 @@ final class LiveSourceStore: ObservableObject {
     static func decodeText(_ data: Data) -> String {
         if let s = String(data: data, encoding: .utf8) { return s }
         let gbkEncoding = String.Encoding(rawValue:
-            CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(rawValue: 0x04000130)))
+            CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(0x04000130)))
         if let s = String(data: data, encoding: gbkEncoding) { return s }
         return String(data: data, encoding: .isoLatin1) ?? ""
     }
