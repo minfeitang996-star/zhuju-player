@@ -21,6 +21,18 @@ struct VodSourceManagerView: View {
 
     private var selectableSites: [VodSite] { store.sites }
 
+    private var allSelected: Bool {
+        !store.sites.isEmpty && selectedIDs.count == store.sites.count
+    }
+
+    private func toggleSelectAll() {
+        if allSelected {
+            selectedIDs.removeAll()
+        } else {
+            selectedIDs = Set(store.sites.map { $0.id })
+        }
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -193,6 +205,13 @@ struct VodSourceManagerView: View {
                     .font(.system(size: 13, weight: .semibold))
             }
             Spacer()
+            Button {
+                toggleSelectAll()
+            } label: {
+                Label(allSelected ? "取消全选" : "全选", systemImage: allSelected ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .disabled(store.sites.isEmpty)
             Button(role: .destructive) {
                 guard !selectedIDs.isEmpty else { return }
                 showBulkDelete = true
