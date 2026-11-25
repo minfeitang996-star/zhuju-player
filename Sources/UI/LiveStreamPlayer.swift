@@ -61,10 +61,11 @@ final class LivePlayerController: ObservableObject {
         timer?.invalidate()
         timer = nil
         failedWork?.cancel()
-        // 先摘走渲染目标和回调，再停播：避免停播后最后一帧残留在旧 drawable 上，退出时叠到列表页
+        // 先摘走渲染目标和回调，再停播并解绑媒体：避免停播后最后一帧残留在旧 drawable 上，退出时叠到列表页
         player.drawable = nil
         player.delegate = nil
         player.stop()
+        player.media = nil
     }
 
     private func activateAudio() {
@@ -173,7 +174,12 @@ struct LiveStreamPlayer: View {
             openPanel = nil
             controller.stop()
             UIApplication.shared.isIdleTimerDisabled = false
-            OrientationHelper.apply(.portrait)
+            // 不立刻转竖屏：退场动画期间请求方向更新会和 cover 退场并发，容易把页面卡在中间帧。
+            // 等退场跑完再转回竖屏，并兜底摘掉可能残留的渲染容器。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                OrientationHelper.apply(.portrait)
+                Self.purgeResidualLiveContainers()
+            }
         }
         .navigationBarHidden(true)
         .statusBar(hidden: !showControls)
@@ -234,8 +240,9 @@ struct LiveStreamPlayer: View {
         VStack {
             HStack(spacing: 12) {
                 Button {
-                    controller.stop()
                     dismiss()
+                    // 退场先启动，停播拆渲染层放到下一拍，避免和退场动画竞争把页面卡在中间帧
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { controller.stop() }
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 16, weight: .semibold))
@@ -461,5 +468,19 @@ struct LiveStreamPlayer: View {
     private func switchToNextSource() {
         let next = (sourceIndex + 1) % channel.sources.count
         selectSource(next)
+    }
+
+    /// 退场动画结束后兜底：把万一还挂在窗口上的 VLC 渲染容器摘掉，避免画面残影叠回列表
+    private static func purgeResidualLiveContainers() {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        func walk(_ v: UIView) {
+            for sub in v.subviews {
+                if sub is VLCPlayerContainer { sub.removeFromSuperview() }
+                walk(sub)
+            }
+        }
+        windows.forEach { walk($0) }
     }
 }
