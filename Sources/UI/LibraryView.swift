@@ -292,12 +292,12 @@ struct LibraryView: View {
 
     /// 文件夹（始终排在前面，不参与搜索过滤）；点播下载目录不在主页文件夹里露出，统一走「下载管理」
     private var folderEntries: [LibraryEntry] {
-        let downloadsPath = MediaLibrary.shared.downloadsFolder.standardFileURL.path
+        let downloadsPath = MediaLibrary.shared.downloadsFolder.standardizedFileURL.path
         return entries.compactMap { entry -> URL? in
             if case .folder(let url, _) = entry { return url }
             return nil
         }
-        .filter { $0.standardFileURL.path != downloadsPath }
+        .filter { $0.standardizedFileURL.path != downloadsPath }
         .map { LibraryEntry.folder($0, library.videoCount(in: $0)) }
     }
 
