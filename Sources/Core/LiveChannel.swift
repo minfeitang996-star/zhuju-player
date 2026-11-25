@@ -577,31 +577,28 @@ enum M3UParser {
 
             if line.hasPrefix("#") { continue }
 
-            // txt 订阅格式：名称,http://...
-            if let comma = line.lastIndex(of: ","),
-               line[comma...].dropFirst().contains("://") {
-                let rawURL = String(line[line.index(after: comma)...])
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                let rawName = String(line[..<comma])
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if LiveSourceStore.isValidURL(rawURL) {
-                    result.append(Entry(name: rawName.isEmpty ? rawURL : rawName,
-                                        url: rawURL, group: pendingGroup))
-                }
-                pendingTitle = nil
-                pendingGroup = nil
-                continue
+            // txt 订阅格式：名称与地址之间可用逗号、#、竖线、空格分隔；也支持整行只有地址
+            if let pair = Self.splitNameURL(line) {
+                let name = pair.name.isEmpty ? (pendingTitle ?? pair.url) : pair.name
+                result.append(Entry(name: name, url: pair.url, group: pendingGroup))
             }
-
-            guard LiveSourceStore.isValidURL(line) else {
-                pendingTitle = nil
-                pendingGroup = nil
-                continue
-            }
-            result.append(Entry(name: pendingTitle ?? line, url: line, group: pendingGroup))
             pendingTitle = nil
             pendingGroup = nil
         }
         return result
+    }
+
+    /// 从一行文本里提取流地址，并把地址前面的文字作为频道名；分隔符支持逗号、#、竖线、空白
+    private static func splitNameURL(_ line: String) -> (name: String, url: String)? {
+        let pattern = #"(https?|rtsp|rtmp|udp|rtp)://[^\s,，、|】)]+"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(line.startIndex..., in: line)
+        guard let match = regex.firstMatch(in: line, range: range),
+              let r = Range(match.range, in: line) else { return nil }
+        let url = String(line[r])
+        guard LiveSourceStore.isValidURL(url) else { return nil }
+        let prefix = String(line[..<r.lowerBound])
+        let name = prefix.trimmingCharacters(in: CharacterSet(charactersIn: " ,，、#|\t"))
+        return (name, url)
     }
 }

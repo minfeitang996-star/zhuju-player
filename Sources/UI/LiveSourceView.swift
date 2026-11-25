@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 网络直播：频道（当前配置内按分类浏览）/ 收藏 / 配置（点哪套切哪套）
 struct LiveSourceView: View {
@@ -1005,6 +1006,7 @@ private struct PlaylistForm: View {
     @State private var title = ""
     @State private var feedURL = ""
     @State private var importing = false
+    @State private var showFileImporter = false
     @State private var errorText: String?
 
     var body: some View {
@@ -1088,6 +1090,15 @@ private struct PlaylistForm: View {
                             .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
 
+                        Button {
+                            showFileImporter = true
+                        } label: {
+                            Label("从「文件」导入本地列表（txt / m3u）", systemImage: "folder.badge.plus")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.85))
+                        }
+                        .padding(.vertical, 6)
+
                         if let errorText {
                             Text(errorText)
                                 .font(.system(size: 12))
@@ -1101,6 +1112,11 @@ private struct PlaylistForm: View {
                     }
                     .padding(16)
                 }
+            }
+            .fileImporter(isPresented: $showFileImporter,
+                          allowedContentTypes: [.plainText, .json, .data, .item],
+                          allowsMultipleSelection: false) { result in
+                handleLocalFile(result)
             }
             .navigationTitle("添加配置")
             .navigationBarTitleDisplayMode(.inline)
@@ -1157,5 +1173,33 @@ private struct PlaylistForm: View {
                 importing = false
             }
         }
+    }
+
+    private func handleLocalFile(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+
+        guard let data = try? Data(contentsOf: url) else {
+            errorText = "读取本地文件失败"
+            return
+        }
+        let text = String(data: data, encoding: .utf8)
+            ?? String(data: data, encoding: .isoLatin1)
+            ?? ""
+        let entries = M3UParser.parse(text)
+        guard !entries.isEmpty else {
+            errorText = "文件里没解析到可用频道"
+            return
+        }
+        let channels = entries.map {
+            LiveChannel(id: UUID(), name: $0.name,
+                        sources: [LiveSource(id: UUID(), label: "一源", url: $0.url)],
+                        group: $0.group, kind: "imported")
+        }
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        store.addPlaylist(title: trimmedTitle.isEmpty ? "本地导入" : trimmedTitle,
+                          feedURL: nil, channels: channels, isBuiltin: false)
+        dismiss()
     }
 }
