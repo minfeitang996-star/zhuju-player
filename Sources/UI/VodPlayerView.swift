@@ -53,6 +53,8 @@ struct VodPlayerView: View {
     @State private var isScrubbing = false
     @State private var lastScrubSeekAt: Double = 0
     @State private var lastScrubSeekTarget: Double = 0
+    /// 松手后定位落地宽限期：这段时间内进度以手指目标为准，不被引擎异步回读的旧位置覆盖
+    @State private var scrubSettleUntil: Double = 0
     @State private var hudText: String?
 
     // 用 @State 持有，避免每次 body 重建都新起一个定时器
@@ -155,7 +157,7 @@ struct VodPlayerView: View {
 
         if validLength > 1 { lengthSeconds = validLength }
 
-        if !dragging, !isScrubbing {
+        if !dragging, !isScrubbing, Date().timeIntervalSince1970 > scrubSettleUntil {
             currentSeconds = Double(controller.player.position) * validLength
         }
 
@@ -239,7 +241,8 @@ struct VodPlayerView: View {
         lastScrubSeekAt = 0
         lastScrubSeekTarget = currentSeconds
         isScrubbing = true
-        // 不暂停：边播边改位置，避免暂停 / 恢复那一下的顿感和按键图标跳变
+        // 拖动期间先暂停，避免在线流边解码边跳帧互相抢队列，落点更稳、不顿
+        controller.player.pause()
         hudText = scrubHUD()
     }
 
@@ -250,11 +253,11 @@ struct VodPlayerView: View {
         let target = min(max(0.2, scrubStart + seconds), lengthSeconds - 0.4)
         scrubTarget = target
 
-        // 拖动中限频定位：第一下小位移就立刻响应，之后拉开间隔，避免把在线解码队列打满
+        // 拖动中限频定位：第一下立刻响应，之后小间隔持续跟手；在线解码队列仍留出缓冲
         let now = Date().timeIntervalSince1970
         let first = lastScrubSeekAt == 0
-        let interval = first ? 0 : 0.4
-        let minDelta = first ? 2.0 : 6.0
+        let interval: Double = first ? 0 : 0.12
+        let minDelta: Double = 1.5
         if now - lastScrubSeekAt >= interval, abs(target - lastScrubSeekTarget) >= minDelta {
             lastScrubSeekAt = now
             lastScrubSeekTarget = target
@@ -275,10 +278,18 @@ struct VodPlayerView: View {
         guard isScrubbing else { return }
         isScrubbing = false
         let delta = scrubTarget - scrubStart
-        if abs(scrubTarget - lastScrubSeekTarget) >= 0.5 {
-            controller.player.position = Float(scrubTarget / lengthSeconds)
-            lastScrubSeekTarget = scrubTarget
-            currentSeconds = scrubTarget
+        // 松手无条件强制落到手指最终位置，不再受中间限频阈值影响，避免停在较早位置看起来像回退
+        controller.player.position = Float(scrubTarget / lengthSeconds)
+        lastScrubSeekTarget = scrubTarget
+        currentSeconds = scrubTarget
+        // 定位落地宽限期：这段时间内进度条不被引擎异步回读的旧位置覆盖
+        scrubSettleUntil = Date().timeIntervalSince1970 + 0.5
+        if scrubWasPlaying {
+            // 等定位落地再恢复播放，避免边 seek 边起播互相抢解码
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+                guard let self else { return }
+                self.controller.player.play()
+            }
         }
         if abs(delta) < 1 {
             hudText = nil

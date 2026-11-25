@@ -61,7 +61,7 @@ final class VodClient {
         let json = try await fetchJSON(site.api, query: query)
         var items = Self.parseItems(json["list"] as? [Any])
         let pageCount = Self.anyInt(json["pagecount"] ?? json["pageCount"])
-        guard !items.isEmpty else { throw ClientError.empty }
+        // 搜索无结果属于正常空态，不再当成失败抛错；解析 / 网络错误才由上层展示重试
         items = await fillMissingCovers(site: site, items: items)
         return (items, max(1, pageCount))
     }
@@ -119,10 +119,20 @@ final class VodClient {
         let candidates = Self.apiCandidates(api)
         var lastError: Error = ClientError.parseFailed
         for candidate in candidates {
-            do {
-                return try await requestJSON(candidate, query: query)
-            } catch {
-                lastError = error
+            for attempt in 0..<3 {
+                do {
+                    return try await requestJSON(candidate, query: query)
+                } catch ClientError.badResponse(let code) where code >= 400 && code < 500 {
+                    // 4xx 是地址 / 参数问题，重试无意义，直接记为最后错误换下一个候选
+                    lastError = ClientError.badResponse(code)
+                    break
+                } catch {
+                    lastError = error
+                    // 网络抖动 / 超时 / 5xx / 解析失败：短退避后再试一次，降低偶发刷不出来的概率
+                    if attempt < 2 {
+                        try? await Task.sleep(nanoseconds: attempt == 0 ? 300_000_000 : 700_000_000)
+                    }
+                }
             }
         }
         throw lastError
@@ -162,15 +172,75 @@ final class VodClient {
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
                          forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 12
+        request.timeoutInterval = 8
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ClientError.badResponse(-1) }
         guard http.statusCode == 200 else { throw ClientError.badResponse(http.statusCode) }
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let json = Self.parseJSON(data) else {
             throw ClientError.parseFailed
         }
         return json
+    }
+
+    /// 宽松解析 JSON：去 BOM / 前导空白，剥离注释与尾随逗号，必要时截取首尾花括号；兼容个别采集站返回的不规范正文
+    private static func parseJSON(_ data: Data) -> [String: Any]? {
+        var body = data
+        if body.count >= 3, body[0] == 0xEF, body[1] == 0xBB, body[2] == 0xBF {
+            body = body.subdata(in: 3..<body.count)
+        }
+        if let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any] { return obj }
+        if let cleaned = stripComments(body),
+           let obj = try? JSONSerialization.jsonObject(with: cleaned) as? [String: Any] { return obj }
+        if let text = String(data: body, encoding: .utf8),
+           let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), end > start,
+           let d = String(text[start...end]).data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] { return obj }
+        return nil
+    }
+
+    /// 轻量剥离 // 行注释、/* */ 块注释与尾随逗号（字符串字面量内原样保留）
+    private static func stripComments(_ data: Data) -> Data? {
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        let chars = Array(text)
+        var out: [Character] = []
+        var i = 0
+        var inString = false
+        var escape = false
+        while i < chars.count {
+            let c = chars[i]
+            if inString {
+                out.append(c)
+                if escape { escape = false }
+                else if c == "\\" { escape = true }
+                else if c == "\"" { inString = false }
+                i += 1
+                continue
+            }
+            if c == "\"" {
+                inString = true
+                out.append(c)
+                i += 1
+                continue
+            }
+            if c == "/", i + 1 < chars.count, chars[i + 1] == "/" {
+                while i < chars.count, chars[i] != "\n" { i += 1 }
+                continue
+            }
+            if c == "/", i + 1 < chars.count, chars[i + 1] == "*" {
+                i += 2
+                while i < chars.count {
+                    if chars[i] == "*", i + 1 < chars.count, chars[i + 1] == "/" { i += 2; break }
+                    i += 1
+                }
+                continue
+            }
+            out.append(c)
+            i += 1
+        }
+        var cleaned = String(out)
+        cleaned = cleaned.replacingOccurrences(of: ",(?=\\s*[}\\]])", with: "", options: .regularExpression)
+        return cleaned.data(using: .utf8)
     }
 
     // MARK: - 解析
