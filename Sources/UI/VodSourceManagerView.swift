@@ -71,7 +71,7 @@ struct VodSourceManagerView: View {
             .sheet(isPresented: $showForm) { VodSiteForm() }
             .sheet(item: $shareFile) { ShareSheet(url: $0.url) }
             .fileImporter(isPresented: $showFileImporter,
-                          allowedContentTypes: [.json, .plainText, .data],
+                          allowedContentTypes: [.json, .plainText, .data, .item],
                           allowsMultipleSelection: false) { result in
                 handleImportFile(result)
             }

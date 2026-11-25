@@ -329,11 +329,29 @@ final class VodStore: ObservableObject {
         var invalidSkipped = 0
         var seen = Set<String>()
         var remote: String?
+        var looseURLs: [String] = []
+
+        /// 把扫到的地址归类：直采接口进 added；.json/.txt 订阅链接记为远程指针；图片/视频/脚本链接丢弃
+        func sweep(_ rawList: [String]) {
+            for raw in rawList {
+                guard let api = Self.resolveAPI(raw, base: baseURL), Self.isValidURL(api) else { continue }
+                guard !Self.isMediaOrAssetURL(api) else { continue }
+                let key = api.lowercased()
+                if seen.contains(key) { continue }
+                if key.hasSuffix(".json") || key.hasSuffix(".txt") || key.hasSuffix(".json?") || key.hasSuffix(".txt?") {
+                    if remote == nil { remote = api }
+                    continue
+                }
+                seen.insert(key)
+                let host = URL(string: api)?.host ?? ""
+                added.append(ImportedSite(name: host, api: api, searchable: true))
+            }
+        }
 
         func collect(_ entry: [String: Any]) {
             let hasAPIKey = entry["api"] != nil
-            let rawAPI = siteString(entry, keys: ["api", "url", "link", "ext", "interface", "endpoint", "siteUrl", "sourceUrl"])
-            let name = siteString(entry, keys: ["name", "title", "nickName", "desc", "remark", "label"])
+            let rawAPI = siteString(entry, keys: ["api", "url", "link", "ext", "interface", "endpoint", "siteUrl", "sourceUrl", "configUrl", "source"])
+            let name = siteString(entry, keys: ["name", "title", "nickName", "desc", "remark", "label", "group"])
             let type = typeValue(entry["type"])
             let spider = siteString(entry, keys: ["spider", "js", "jar"])
             let spiderLower = spider.lowercased()
@@ -364,17 +382,24 @@ final class VodStore: ObservableObject {
                 // urls 为字符串：远程订阅链接
                 if let urlsString = dict["urls"] as? String, remote == nil {
                     remote = urlsString
-                } else if let urls = dict["urls"] as? [String: String] {
-                    for (n, u) in urls { collect(["name": n, "api": u]) }
                 } else if let urls = dict["urls"] as? [String: Any] {
                     for (n, v) in urls {
                         if let u = v as? String { collect(["name": n, "api": u]) }
                     }
                 }
                 collect(dict)
-                for value in dict.values { walk(value) }
+                for value in dict.values {
+                    // 双层编码：字符串里再嵌一段 JSON / 数组，解出来继续递归
+                    if let s = value as? String, let sub = Self.decodeJSONString(s) {
+                        walk(sub)
+                    } else {
+                        walk(value)
+                    }
+                }
             } else if let array = node as? [Any] {
                 for value in array { walk(value) }
+            } else if let s = node as? String {
+                looseURLs.append(s)
             }
         }
 
@@ -391,28 +416,75 @@ final class VodStore: ObservableObject {
             walk(any)
         }
 
-        // 3) 纯文本兜底：每行 / 逗号一个接口地址
+        // 3) 结构解析不到的地址，按树内原始字符串兜底扫一遍归类
+        sweep(looseURLs)
+
+        // 4) 纯文本兜底：整段正则提取 http 地址，支持「名称 网址」「名称,网址」混排
         guard let text = String(data: data, encoding: .utf8) else {
             return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped, remoteSubscription: remote)
         }
         if added.isEmpty {
+            sweep(Self.extractURLs(text))
             let lines = text.components(separatedBy: CharacterSet.newlines)
-                .flatMap { $0.components(separatedBy: ",") }
             for line in lines {
                 let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !t.isEmpty else { continue }
-                if let api = Self.resolveAPI(t, base: baseURL), Self.isValidURL(api) {
-                    let key = api.lowercased()
-                    if !seen.contains(key) {
-                        seen.insert(key)
-                        added.append(ImportedSite(name: "", api: api, searchable: true))
-                    }
+                let name: String
+                let rest: String
+                if let r = t.range(of: #"https?://"#, options: .regularExpression) {
+                    name = String(t[..<r.lowerBound])
+                        .trimmingCharacters(in: CharacterSet(charactersIn: " ,，、|\t"))
+                    rest = String(t[r.lowerBound...])
                 } else {
+                    name = ""
+                    rest = t
+                }
+                guard let api = Self.resolveAPI(rest, base: baseURL), Self.isValidURL(api) else {
                     invalidSkipped += 1
+                    continue
+                }
+                let key = api.lowercased()
+                if !seen.contains(key) {
+                    seen.insert(key)
+                    added.append(ImportedSite(name: name, api: api, searchable: true))
                 }
             }
         }
         return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped, remoteSubscription: remote)
+    }
+
+    /// 字符串内容本身是一段 JSON 对象 / 数组时解码返回，否则返回 nil
+    private static func decodeJSONString(_ s: String) -> Any? {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("{") || t.hasPrefix("[") else { return nil }
+        guard let d = t.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: d)
+    }
+
+    /// 从任意文本里正则提取 http(s) 地址，并去掉尾部附着的标点
+    private static func extractURLs(_ text: String) -> [String] {
+        let pattern = #"https?://[^\s"'\\\]\}<>,;，、）)】]+"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.matches(in: text, range: range).compactMap { m in
+            guard let r = Range(m.range, in: text) else { return nil }
+            return String(text[r]).trimmingCharacters(in: CharacterSet(charactersIn: ".。"))
+        }
+    }
+
+    /// 图片 / 视频 / 音频 / 脚本 / 压缩包等非站点接口链接，不导入
+    private static func isMediaOrAssetURL(_ url: String) -> Bool {
+        guard let u = URL(string: url) else { return false }
+        var last = u.lastPathComponent.lowercased()
+        if let q = last.firstIndex(of: "?") { last = String(last[..<q]) }
+        guard last.contains(".") else { return false }
+        let ext = String(last.split(separator: ".").last ?? "")
+        let assetExts: Set<String> = [
+            "m3u8", "mp4", "m4v", "mov", "webm", "mkv", "ts", "m4s", "m3u",
+            "mp3", "m4a", "aac", "wav", "jpg", "jpeg", "png", "gif", "webp",
+            "ico", "svg", "apk", "zip", "rar", "7z", "js", "css", "html", "htm"
+        ]
+        return assetExts.contains(ext)
     }
 
     /// 从配置原文里提取唯一（或第一条）远程订阅链接；本地文件只是指针时用它再拉一次
