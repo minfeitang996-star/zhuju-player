@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 import MobileVLCKit
 
@@ -26,12 +27,31 @@ struct VodPlayerView: View {
     @State private var showControls = true
     @State private var layoutTick = 0
 
+    /// 画面适配（适合 / 填充 / 拉伸），记住上次选择
+    @State private var aspectMode: VideoMode =
+        VideoMode(rawValue: UserDefaults.standard.string(forKey: "vodVideoMode") ?? "fill") ?? .fill
+    /// 当前是否横屏；可手动切成竖屏
+    @State private var landscape = true
+
+    // 进度
+    @State private var currentSeconds: Double = 0
+    @State private var lengthSeconds: Double = 0
+    @State private var dragging = false
+    @State private var dragSeconds: Double = 0
+    /// 待恢复的上次播放位置（0...1）
+    @State private var pendingResume: Double?
+    @State private var saveTicks = 0
+    @State private var lastSavedSeconds: Double = -1
+
+    // 用 @State 持有，避免每次 body 重建都新起一个定时器
+    @State private var ticker = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                VLCVideoView(player: controller.player, mode: .fill, safeArea: false, aspect: nil, tick: layoutTick)
+                VLCVideoView(player: controller.player, mode: aspectMode, safeArea: false, aspect: nil, tick: layoutTick)
                     .ignoresSafeArea()
 
                 Color.clear
@@ -56,16 +76,21 @@ struct VodPlayerView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { layoutTick += 1 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
             }
+            .onReceive(ticker) { _ in tickUpdate() }
         }
         .onAppear {
+            landscape = true
             OrientationHelper.apply(.landscapeRight)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { OrientationHelper.apply(.landscapeRight) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { OrientationHelper.apply(.landscapeRight) }
+            // 先写历史（会沿用已存的进度），再记下要续播到的位置
             store.recordHistory(name: target.title, pic: target.pic, url: target.url,
                                 episodeName: target.episodeName, siteName: target.siteName)
+            pendingResume = store.resumeProgress(for: target.url)?.progress
             controller.open(target.url)
         }
         .onDisappear {
+            saveProgressNow()
             controller.stop()
             UIApplication.shared.isIdleTimerDisabled = false
             OrientationHelper.apply(.portrait)
@@ -73,6 +98,64 @@ struct VodPlayerView: View {
         .navigationBarHidden(true)
         .statusBar(hidden: !showControls)
     }
+
+    // MARK: - 每 0.3 秒刷新进度
+
+    private func tickUpdate() {
+        let length = Double(controller.player.media?.length.intValue ?? 0) / 1000.0
+        let validLength = length > 1 ? length : lengthSeconds
+
+        // 时长拿到之后才做续播跳转，否则不知道往哪儿跳
+        if let resume = pendingResume, validLength > 1 {
+            pendingResume = nil
+            let seconds = resume * validLength
+            controller.player.position = Float(resume)
+            currentSeconds = seconds
+            lengthSeconds = validLength
+        }
+
+        if validLength > 1 { lengthSeconds = validLength }
+
+        if !dragging {
+            currentSeconds = Double(controller.player.position) * validLength
+        }
+
+        // 每约 1.8 秒回写一次进度，切后台 / 退出时也不丢
+        guard !dragging, lengthSeconds > 1, controller.player.isPlaying else { return }
+        saveTicks += 1
+        if saveTicks % 6 == 0, abs(currentSeconds - lastSavedSeconds) > 1 {
+            lastSavedSeconds = currentSeconds
+            store.updateProgress(url: target.url,
+                                 progress: currentSeconds / lengthSeconds,
+                                 duration: lengthSeconds)
+        }
+    }
+
+    private func saveProgressNow() {
+        guard lengthSeconds > 1 else { return }
+        store.updateProgress(url: target.url,
+                             progress: currentSeconds / lengthSeconds,
+                             duration: lengthSeconds)
+    }
+
+    /// 跳到指定秒数
+    private func seek(to seconds: Double) {
+        guard lengthSeconds > 1 else { return }
+        let clamped = min(max(0.2, seconds), lengthSeconds - 0.4)
+        controller.player.position = Float(clamped / lengthSeconds)
+        currentSeconds = clamped
+    }
+
+    private func format(_ seconds: Double) -> String {
+        let total = Int(max(0, seconds))
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
+        return String(format: "%02d:%02d", m, s)
+    }
+
+    // MARK: - 覆盖层
 
     private var loadingOverlay: some View {
         VStack(spacing: 14) {
@@ -112,55 +195,148 @@ struct VodPlayerView: View {
     }
 
     private func controlsOverlay(insets: EdgeInsets) -> some View {
-        VStack {
-            HStack(spacing: 12) {
-                Button {
-                    controller.stop()
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 38, height: 38)
-                        .background(Color.black.opacity(0.45))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(target.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    Text(target.episodeName)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-
-                Spacer()
-
-                Button {
-                    store.toggleFavorite(VodHistoryItem(
-                        id: UUID(), name: target.title, pic: target.pic,
-                        url: target.url, episodeName: target.episodeName,
-                        siteName: target.siteName, playedAt: Date()))
-                } label: {
-                    Image(systemName: store.isFavorited(target.url) ? "heart.fill" : "heart")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(store.isFavorited(target.url) ? theme.accent : .white)
-                        .frame(width: 38, height: 38)
-                        .background(Color.black.opacity(0.45))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.top, 12 + insets.top)
-            .padding(.leading, 16 + insets.leading)
-            .padding(.trailing, 16 + insets.trailing)
+        VStack(spacing: 0) {
+            topBar(insets: insets)
 
             Spacer()
 
-            HStack(spacing: 20) {
+            bottomBar(insets: insets)
+        }
+    }
+
+    private func topBar(insets: EdgeInsets) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                saveProgressNow()
+                controller.stop()
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(target.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text(target.episodeName)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            Button {
+                store.toggleFavorite(VodHistoryItem(
+                    id: UUID(), name: target.title, pic: target.pic,
+                    url: target.url, episodeName: target.episodeName,
+                    siteName: target.siteName, playedAt: Date()))
+            } label: {
+                Image(systemName: store.isFavorited(target.url) ? "heart.fill" : "heart")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(store.isFavorited(target.url) ? theme.accent : .white)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            // 画面适配：适合 / 填充 / 拉伸
+            Menu {
+                ForEach(VideoMode.allCases) { mode in
+                    Button {
+                        aspectMode = mode
+                        UserDefaults.standard.set(mode.rawValue, forKey: "vodVideoMode")
+                        layoutTick += 1
+                    } label: {
+                        if mode == aspectMode {
+                            Label(mode.title, systemImage: "checkmark")
+                        } else {
+                            Text(mode.title)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "aspectratio")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
+            }
+
+            // 横屏 / 竖屏切换
+            Button {
+                landscape.toggle()
+                OrientationHelper.apply(landscape ? .landscapeRight : .portrait)
+                layoutTick += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { layoutTick += 1 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
+            } label: {
+                Image(systemName: landscape ? "rectangle.portrait.and.arrow.right" : "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 12 + insets.top)
+        .padding(.leading, 16 + insets.leading)
+        .padding(.trailing, 16 + insets.trailing)
+    }
+
+    private func bottomBar(insets: EdgeInsets) -> some View {
+        VStack(spacing: 12) {
+            if lengthSeconds > 1 {
+                HStack(spacing: 10) {
+                    Text(format(dragging ? dragSeconds : currentSeconds))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(width: 56, alignment: .leading)
+
+                    Slider(value: Binding(
+                        get: { dragging ? dragSeconds : min(currentSeconds, lengthSeconds) },
+                        set: { newValue in
+                            dragging = true
+                            dragSeconds = newValue
+                        }
+                    ), in: 0...max(1, lengthSeconds), onEditingChanged: { editing in
+                        if editing {
+                            dragSeconds = currentSeconds
+                        } else {
+                            dragging = false
+                            seek(to: dragSeconds)
+                        }
+                    })
+                    .tint(theme.accent)
+
+                    Text(format(lengthSeconds))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(width: 56, alignment: .trailing)
+                }
+            }
+
+            HStack(spacing: 26) {
+                // 快退 10 秒
+                Button {
+                    seek(to: currentSeconds - 10)
+                } label: {
+                    Image(systemName: "gobackward.10")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                        .frame(width: 48, height: 48)
+                }
+                .buttonStyle(.plain)
+
                 Button {
                     controller.toggle()
                 } label: {
@@ -172,8 +348,20 @@ struct VodPlayerView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
+
+                // 快进 10 秒
+                Button {
+                    seek(to: currentSeconds + 10)
+                } label: {
+                    Image(systemName: "goforward.10")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                        .frame(width: 48, height: 48)
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.bottom, 18 + insets.bottom)
         }
+        .padding(.horizontal, 24 + insets.leading)
+        .padding(.bottom, 18 + insets.bottom)
     }
 }

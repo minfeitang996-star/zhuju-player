@@ -17,8 +17,22 @@ struct VodView: View {
     @State private var keyword = ""
     @State private var selectedCategoryID: String?
     @State private var showSiteForm = false
-    @State private var selectedItem: VodItem?
+    @State private var route: VodRoute?
     @State private var requestTick = 0
+    @FocusState private var searchFocused: Bool
+
+    /// 影视页的两种去向：进详情 / 从观看记录直接续播
+    private enum VodRoute: Identifiable {
+        case detail(VodItem)
+        case play(VodPlayTarget)
+
+        var id: String {
+            switch self {
+            case .detail(let item): return "detail-" + item.id
+            case .play(let target): return "play-" + target.url
+            }
+        }
+    }
 
     private var activeSite: VodSite? { store.activeSite }
     private var hasMore: Bool { page < pageCount }
@@ -56,8 +70,13 @@ struct VodView: View {
             .sheet(isPresented: $showSiteForm) {
                 VodSiteForm()
             }
-            .fullScreenCover(item: $selectedItem) { item in
-                VodDetailView(item: item)
+            .fullScreenCover(item: $route) { route in
+                switch route {
+                case .detail(let item):
+                    VodDetailView(item: item)
+                case .play(let target):
+                    VodPlayerView(target: target)
+                }
             }
             .onAppear {
                 guard activeSite != nil else { return }
@@ -77,6 +96,11 @@ struct VodView: View {
         VStack(spacing: 0) {
             searchBar
 
+            if keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !store.searchHistory.isEmpty {
+                searchHistoryRow
+            }
+
             if !categories.isEmpty {
                 categoryChips
             }
@@ -90,9 +114,11 @@ struct VodView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.white.opacity(0.4))
             TextField("搜影片名称", text: $keyword)
+                .focused($searchFocused)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
-                .onSubmit { Task { await reload() } }
+                .submitLabel(.search)
+                .onSubmit { submitSearch(keyword) }
             if !keyword.isEmpty {
                 Button {
                     keyword = ""
@@ -108,6 +134,55 @@ struct VodView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
+    }
+
+    /// 搜索历史：搜过的词都留着，点一下直接重新搜，不用每次重打
+    private var searchHistoryRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Text("最近")
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.white.opacity(0.35))
+                    .padding(.trailing, 2)
+
+                ForEach(store.searchHistory, id: \.self) { text in
+                    Button {
+                        submitSearch(text)
+                    } label: {
+                        Text(text)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.75))
+                            .lineLimit(1)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.white.opacity(0.07)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    store.clearSearchHistory()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 8)
+    }
+
+    private func submitSearch(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        keyword = trimmed
+        searchFocused = false
+        store.addSearchKeyword(trimmed)
+        Task { await reload() }
     }
 
     private var categoryChips: some View {
@@ -142,10 +217,15 @@ struct VodView: View {
 
     private var list: some View {
         ScrollView {
+            if keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !store.history.isEmpty {
+                watchHistorySection
+            }
+
             LazyVGrid(columns: gridColumns, spacing: 14) {
                 ForEach(items) { item in
                     Button {
-                        selectedItem = item
+                        route = .detail(item)
                     } label: {
                         VodCard(item: item, theme: theme)
                     }
@@ -174,6 +254,85 @@ struct VodView: View {
             }
         }
         .refreshable { await reload() }
+    }
+
+    /// 观看记录：最近看过的片，显示看到第几集与百分比，点一下直接续播
+    private var watchHistorySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("观看记录")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                Button("清空") { store.clearHistory() }
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Array(store.history.prefix(12))) { item in
+                        watchHistoryCard(item)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+    }
+
+    private func watchHistoryCard(_ item: VodHistoryItem) -> some View {
+        Button {
+            route = .play(VodPlayTarget(title: item.name,
+                                        episodeName: item.episodeName,
+                                        url: item.url,
+                                        siteName: item.siteName,
+                                        pic: item.pic))
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack(alignment: .bottomLeading) {
+                    VodCover(pic: item.pic, width: 148, height: 84)
+                    if let progress = item.progress, progress > 0.02 {
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.2))
+                            GeometryReader { proxy in
+                                Capsule().fill(theme.accent)
+                                    .frame(width: max(3, proxy.size.width * progress))
+                            }
+                        }
+                        .frame(height: 3)
+                        .padding(.horizontal, 7)
+                        .padding(.bottom, 7)
+                    }
+                }
+
+                Text(item.name)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    Text(item.episodeName).lineLimit(1)
+                    if let progress = item.progress, progress > 0.02 {
+                        Text("· 看到 \(Int(progress * 100))%")
+                            .foregroundColor(theme.accent)
+                    }
+                }
+                .font(.system(size: 10.5))
+                .foregroundColor(.white.opacity(0.45))
+            }
+            .frame(width: 148)
+        }
+        .buttonStyle(HomePressStyle(accent: theme.accent))
+        .contextMenu {
+            Button(role: .destructive) {
+                store.deleteHistory(item.id)
+            } label: {
+                Label("删除这条记录", systemImage: "trash")
+            }
+        }
     }
 
     private var gridColumns: [GridItem] {

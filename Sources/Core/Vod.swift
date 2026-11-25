@@ -64,6 +64,10 @@ struct VodHistoryItem: Identifiable, Codable, Equatable {
     var episodeName: String
     var siteName: String
     var playedAt: Date
+    /// 播放进度 0...1；旧记录没有这个字段，解码时按 nil 处理
+    var progress: Double? = nil
+    /// 影片总时长（秒），用来在记录里显示看到的位置
+    var duration: Double? = nil
 }
 
 /// 从 TVBox / 影视仓配置 JSON 里解析出来的待导入站点
@@ -88,14 +92,17 @@ final class VodStore: ObservableObject {
     @Published var activeSiteID: UUID?
     @Published var history: [VodHistoryItem] = []
     @Published var favorites: [VodHistoryItem] = []
+    @Published var searchHistory: [String] = []
 
     private let sitesKey = "vodSitesV1"
     private let activeKey = "vodActiveSite"
     private let historyKey = "vodHistory"
     private let favKey = "vodFavorites"
+    private let searchKey = "vodSearchHistory"
     private let seededKey = "vodSeededV1"
     private let maxHistory = 30
     private let maxFavorites = 200
+    private let maxSearch = 12
 
     /// 内置默认源：经纯直连实测可达的苹果 CMS 采集站；公开源会失效，失效后可在 App 内换源
     private static let builtinSites: [(name: String, api: String)] = [
@@ -109,6 +116,7 @@ final class VodStore: ObservableObject {
         loadSites()
         loadHistory()
         loadFavorites()
+        loadSearchHistory()
         loadActive()
         seedBuiltins()
         ensureActive()
@@ -159,6 +167,37 @@ final class VodStore: ObservableObject {
         if let data = try? JSONEncoder().encode(favorites) {
             UserDefaults.standard.set(data, forKey: favKey)
         }
+    }
+
+    // MARK: 搜索历史
+
+    private func loadSearchHistory() {
+        guard let saved = UserDefaults.standard.array(forKey: searchKey) as? [String] else { return }
+        searchHistory = Array(saved.prefix(maxSearch))
+    }
+
+    private func saveSearchHistory() {
+        UserDefaults.standard.set(searchHistory, forKey: searchKey)
+    }
+
+    /// 记一条搜索关键词：重复的提到最前，最多留 12 条
+    func addSearchKeyword(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        searchHistory.removeAll { $0.caseInsensitiveCompare(t) == .orderedSame }
+        searchHistory.insert(t, at: 0)
+        if searchHistory.count > maxSearch { searchHistory.removeLast(searchHistory.count - maxSearch) }
+        saveSearchHistory()
+    }
+
+    func removeSearchKeyword(_ text: String) {
+        searchHistory.removeAll { $0 == text }
+        saveSearchHistory()
+    }
+
+    func clearSearchHistory() {
+        searchHistory.removeAll()
+        saveSearchHistory()
     }
 
     private func loadActive() {
@@ -342,6 +381,9 @@ final class VodStore: ObservableObject {
     func recordHistory(name: String, pic: String?, url: String, episodeName: String, siteName: String) {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard Self.isValidURL(trimmed) else { return }
+        // 重新打开同一集时要沿用上次看到的进度，不能清掉
+        let savedProgress = history.first { $0.url == trimmed }?.progress
+        let savedDuration = history.first { $0.url == trimmed }?.duration
         history.removeAll { $0.url == trimmed }
         let item = VodHistoryItem(
             id: UUID(),
@@ -350,11 +392,46 @@ final class VodStore: ObservableObject {
             url: trimmed,
             episodeName: episodeName,
             siteName: siteName,
-            playedAt: Date()
+            playedAt: Date(),
+            progress: savedProgress,
+            duration: savedDuration
         )
         history.insert(item, at: 0)
         if history.count > maxHistory { history.removeLast(history.count - maxHistory) }
         saveHistory()
+    }
+
+    /// 播放中回写进度：更新对应历史记录的百分比、总时长与观看时间，并提到最前
+    func updateProgress(url: String, progress: Double, duration: Double) {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidURL(trimmed) else { return }
+        guard let idx = history.firstIndex(where: { $0.url == trimmed }) else { return }
+        let clamped = min(max(0, progress), 1)
+        // 已经看到 98% 以上按看完处理，下次从头开始
+        history[idx].progress = clamped >= 0.98 ? nil : clamped
+        history[idx].duration = duration > 1 ? duration : history[idx].duration
+        history[idx].playedAt = Date()
+        if idx > 0 {
+            let item = history.remove(at: idx)
+            history.insert(item, at: 0)
+        }
+        saveHistory()
+    }
+
+    /// 上次看到的位置：只有 2%~98% 之间才算有可续播的进度
+    func resumeProgress(for url: String) -> (progress: Double, duration: Double?)? {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let item = history.first(where: { $0.url == trimmed }),
+              let p = item.progress, p > 0.02, p < 0.98 else { return nil }
+        return (p, item.duration)
+    }
+
+    /// 最近在看的记录（有进度的那部分，新的在前）
+    var continueWatching: [VodHistoryItem] {
+        history.filter { item in
+            guard let p = item.progress else { return false }
+            return p > 0.02 && p < 0.98
+        }
     }
 
     func deleteHistory(_ id: UUID) {
