@@ -43,6 +43,16 @@ struct VodPlayerView: View {
     @State private var saveTicks = 0
     @State private var lastSavedSeconds: Double = -1
 
+    // 画面横滑快进（与本地播放器同一套手感）
+    @State private var dragAxis: String?
+    @State private var scrubStart: Double = 0
+    @State private var scrubTarget: Double = 0
+    @State private var scrubWasPlaying = false
+    @State private var isScrubbing = false
+    @State private var lastScrubSeekAt: Double = 0
+    @State private var lastScrubSeekTarget: Double = 0
+    @State private var hudText: String?
+
     // 用 @State 持有，避免每次 body 重建都新起一个定时器
     @State private var ticker = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
 
@@ -53,6 +63,7 @@ struct VodPlayerView: View {
 
                 VLCVideoView(player: controller.player, mode: aspectMode, safeArea: false, aspect: nil, tick: layoutTick)
                     .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
                 Color.clear
                     .ignoresSafeArea()
@@ -60,6 +71,31 @@ struct VodPlayerView: View {
                     .onTapGesture {
                         withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
                     }
+                    .gesture(
+                        DragGesture(minimumDistance: 12)
+                            .onChanged { value in
+                                handleDragChanged(value, in: geo.size)
+                            }
+                            .onEnded { value in
+                                handleDragEnded(value, in: geo.size)
+                            }
+                    )
+
+                if let hudText {
+                    VStack {
+                        Text(hudText)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.55))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .transition(.opacity)
+                        Spacer()
+                    }
+                    .padding(.top, 18 + geo.safeAreaInsets.top)
+                    .allowsHitTesting(false)
+                }
 
                 if controller.loading {
                     loadingOverlay
@@ -116,12 +152,12 @@ struct VodPlayerView: View {
 
         if validLength > 1 { lengthSeconds = validLength }
 
-        if !dragging {
+        if !dragging, !isScrubbing {
             currentSeconds = Double(controller.player.position) * validLength
         }
 
         // 每约 1.8 秒回写一次进度，切后台 / 退出时也不丢
-        guard !dragging, lengthSeconds > 1, controller.player.isPlaying else { return }
+        guard !dragging, !isScrubbing, lengthSeconds > 1, controller.player.isPlaying else { return }
         saveTicks += 1
         if saveTicks % 6 == 0, abs(currentSeconds - lastSavedSeconds) > 1 {
             lastSavedSeconds = currentSeconds
@@ -153,6 +189,99 @@ struct VodPlayerView: View {
         let s = total % 60
         if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
         return String(format: "%02d:%02d", m, s)
+    }
+
+    // MARK: - 画面横滑快进（与本地播放器同一套手感）
+
+    private func handleDragChanged(_ value: DragGesture.Value, in size: CGSize) {
+        guard Prefs.gestureEnabled, lengthSeconds > 1 else { return }
+        if dragAxis == nil {
+            let dx = abs(value.translation.width)
+            let dy = abs(value.translation.height)
+            guard max(dx, dy) > 10 else { return }
+            dragAxis = dx > dy ? "h" : "v"
+            if dragAxis == "h" { beginScrub() }
+        }
+        guard dragAxis == "h", isScrubbing else { return }
+        updateScrub(value.translation.width, width: max(1, size.width))
+    }
+
+    private func handleDragEnded(_ value: DragGesture.Value, in size: CGSize) {
+        let axis = dragAxis
+        dragAxis = nil
+        guard axis == "h", isScrubbing else { return }
+        updateScrub(value.translation.width, width: max(1, size.width))
+        finishScrub()
+    }
+
+    private func beginScrub() {
+        scrubStart = currentSeconds
+        scrubTarget = currentSeconds
+        scrubWasPlaying = controller.player.isPlaying
+        lastScrubSeekAt = 0
+        lastScrubSeekTarget = currentSeconds
+        isScrubbing = true
+        // 拖动期间先暂停，省得边解码边跳帧
+        controller.player.pause()
+        hudText = scrubHUD()
+    }
+
+    private func updateScrub(_ dx: CGFloat, width: CGFloat) {
+        guard isScrubbing, lengthSeconds > 1 else { return }
+        // 横滑满一屏对应「设置 → 手势与操作 → 横滑一屏进度」
+        let seconds = Double(dx / width) * Prefs.scrubSeconds
+        let target = min(max(0.2, scrubStart + seconds), lengthSeconds - 0.4)
+        scrubTarget = target
+
+        let now = Date().timeIntervalSince1970
+        if now - lastScrubSeekAt >= 0.22, abs(target - lastScrubSeekTarget) >= 3.0 {
+            lastScrubSeekAt = now
+            lastScrubSeekTarget = target
+            controller.player.position = Float(target / lengthSeconds)
+            currentSeconds = target
+        }
+        hudText = scrubHUD()
+    }
+
+    private func scrubHUD() -> String {
+        let delta = scrubTarget - scrubStart
+        let sign = delta >= 0 ? "快进" : "快退"
+        let secs = Int(abs(delta).rounded())
+        return "\(sign) \(secs) 秒 · \(format(scrubTarget)) / \(format(lengthSeconds))"
+    }
+
+    private func finishScrub() {
+        guard isScrubbing else { return }
+        isScrubbing = false
+        let delta = scrubTarget - scrubStart
+        if abs(scrubTarget - lastScrubSeekTarget) >= 0.5 {
+            controller.player.position = Float(scrubTarget / lengthSeconds)
+            lastScrubSeekTarget = scrubTarget
+            currentSeconds = scrubTarget
+        }
+        if scrubWasPlaying {
+            // 定位落地后再恢复播放，避免互相抢解码
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [controller] in
+                controller.player.play()
+            }
+        }
+        if abs(delta) < 1 {
+            hudText = nil
+        } else {
+            let text = (delta > 0 ? "快进 " : "快退 ")
+                + "\(Int(abs(delta).rounded())) 秒 · "
+                + format(scrubTarget)
+            showHUD(text)
+        }
+    }
+
+    private func showHUD(_ text: String) {
+        hudText = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [self] in
+            if self.hudText == text {
+                withAnimation(.easeOut(duration: 0.2)) { self.hudText = nil }
+            }
+        }
     }
 
     // MARK: - 覆盖层
