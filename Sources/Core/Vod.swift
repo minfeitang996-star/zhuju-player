@@ -99,7 +99,7 @@ final class VodStore: ObservableObject {
     private let historyKey = "vodHistory"
     private let favKey = "vodFavorites"
     private let searchKey = "vodSearchHistory"
-    private let seededKey = "vodSeededV1"
+    private let seededKey = "vodSeededV2"
     private let maxHistory = 30
     private let maxFavorites = 200
     private let maxSearch = 12
@@ -107,7 +107,8 @@ final class VodStore: ObservableObject {
     /// 内置默认源：经纯直连实测可达的苹果 CMS 采集站；公开源会失效，失效后可在 App 内换源
     private static let builtinSites: [(name: String, api: String)] = [
         ("360资源", "https://360zy.com/api.php/provide/vod/"),
-        ("豪华资源", "https://hhzyapi.com/api.php/provide/vod/")
+        ("豪华资源", "https://hhzyapi.com/api.php/provide/vod/"),
+        ("无尽资源", "https://api.wujinapi.com/api.php/provide/vod/")
     ]
 
     static let shared = VodStore()
