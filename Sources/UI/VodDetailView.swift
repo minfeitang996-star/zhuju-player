@@ -22,6 +22,20 @@ struct VodDetailView: View {
         return detail.lines[lineIndex]
     }
 
+    /// 详情返回后以它为准：列表接口可能不带封面，详情里通常有
+    private var shownItem: VodItem {
+        guard let detail else { return item }
+        var merged = item
+        let source = detail.item
+        if merged.pic?.isEmpty ?? true { merged.pic = source.pic }
+        if merged.remarks?.isEmpty ?? true { merged.remarks = source.remarks }
+        if merged.year?.isEmpty ?? true { merged.year = source.year }
+        if merged.area?.isEmpty ?? true { merged.area = source.area }
+        if merged.typeName?.isEmpty ?? true { merged.typeName = source.typeName }
+        if source.name.count > merged.name.count { merged.name = source.name }
+        return merged
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -95,29 +109,29 @@ struct VodDetailView: View {
 
     private func header(_ detail: VodDetail) -> some View {
         HStack(spacing: 16) {
-            VodCover(pic: item.pic, width: 110, height: 150)
+            VodCover(pic: shownItem.pic, width: 110, height: 150)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(item.name)
+                Text(shownItem.name)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(3)
 
                 HStack(spacing: 8) {
-                    if let year = item.year, !year.isEmpty {
+                    if let year = shownItem.year, !year.isEmpty {
                         Text(year).font(.system(size: 12))
                     }
-                    if let area = item.area, !area.isEmpty {
+                    if let area = shownItem.area, !area.isEmpty {
                         Text(area).font(.system(size: 12))
                     }
-                    if let remarks = item.remarks, !remarks.isEmpty {
+                    if let remarks = shownItem.remarks, !remarks.isEmpty {
                         Text(remarks).font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.accent)
                     }
                 }
                 .foregroundColor(.white.opacity(0.55))
 
-                if let typeName = item.typeName, !typeName.isEmpty {
+                if let typeName = shownItem.typeName, !typeName.isEmpty {
                     Text(typeName).font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.45))
                 }
@@ -175,11 +189,11 @@ struct VodDetailView: View {
                     ForEach(line.episodes) { episode in
                         Button {
                             playTarget = VodPlayTarget(
-                                title: item.name,
+                                title: shownItem.name,
                                 episodeName: episode.name,
                                 url: episode.url,
                                 siteName: siteName,
-                                pic: item.pic
+                                pic: shownItem.pic
                             )
                         } label: {
                             Text(episode.name)
@@ -253,8 +267,8 @@ struct VodDetailView: View {
         guard let episode = currentLine?.episodes.first else { return }
         let snapshot = VodHistoryItem(
             id: UUID(),
-            name: item.name,
-            pic: item.pic,
+            name: shownItem.name,
+            pic: shownItem.pic,
             url: episode.url,
             episodeName: episode.name,
             siteName: siteName,

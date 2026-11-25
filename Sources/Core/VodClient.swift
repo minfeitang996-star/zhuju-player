@@ -59,10 +59,37 @@ final class VodClient {
         if let keyword, !keyword.isEmpty { query["wd"] = keyword }
 
         let json = try await fetchJSON(site.api, query: query)
-        let items = Self.parseItems(json["list"] as? [Any])
+        var items = Self.parseItems(json["list"] as? [Any])
         let pageCount = Self.anyInt(json["pagecount"] ?? json["pageCount"])
         guard !items.isEmpty else { throw ClientError.empty }
+        items = await fillMissingCovers(site: site, items: items)
         return (items, max(1, pageCount))
+    }
+
+    /// 部分采集站（360资源、豪华资源等）的 list 接口不返回 vod_pic，
+    /// 用 detail&ids= 批量补一次封面；补不到就保持原样，不影响浏览和播放
+    private func fillMissingCovers(site: VodSite, items: [VodItem]) async -> [VodItem] {
+        let missing = items.filter { ($0.pic ?? "").isEmpty }.map(\.id).filter { !$0.isEmpty }
+        guard !missing.isEmpty else { return items }
+        let ids = missing.prefix(40).joined(separator: ",")
+        guard let json = try? await fetchJSON(site.api, query: ["ac": "detail", "ids": ids]),
+              let list = json["list"] as? [[String: Any]] else { return items }
+
+        var pics: [String: String] = [:]
+        for entry in list {
+            let id = Self.anyString(entry["vod_id"] ?? entry["id"])
+            guard !id.isEmpty,
+                  let pic = Self.normalizePic(Self.anyString(entry["vod_pic"] ?? entry["pic"])) else { continue }
+            pics[id] = pic
+        }
+        guard !pics.isEmpty else { return items }
+
+        return items.map { item in
+            guard (item.pic ?? "").isEmpty, let pic = pics[item.id] else { return item }
+            var copy = item
+            copy.pic = pic
+            return copy
+        }
     }
 
     // MARK: - 详情
