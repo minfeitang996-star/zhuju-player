@@ -97,6 +97,7 @@ struct VodView: View {
                 }
             }
             .onAppear {
+                OrientationHelper.apply(.portrait)
                 guard activeSite != nil else { return }
                 Task { await reload() }
             }

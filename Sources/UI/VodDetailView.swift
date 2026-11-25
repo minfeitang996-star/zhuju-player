@@ -71,7 +71,10 @@ struct VodDetailView: View {
             .fullScreenCover(item: $playTarget) { target in
                 VodPlayerView(target: target)
             }
-            .onAppear { Task { await loadDetail() } }
+            .onAppear {
+                OrientationHelper.apply(.portrait)
+                Task { await loadDetail() }
+            }
         }
         .navigationViewStyle(.stack)
         .tint(theme.accent)

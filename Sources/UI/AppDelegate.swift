@@ -33,7 +33,27 @@ enum OrientationHelper {
             }
         }
 
+        // 横屏播放页退出后，窗口/根视图可能还停留在旧的横屏几何，回到竖屏页面时
+        // 布局按旧宽度算，导致内容挤窄、比例错乱。这里把窗口和根视图 frame 同步成
+        // 当前 scene 边界并强制重排，分拍兜底。
+        func relayoutWindows() {
+            for scene in scenes {
+                let bounds = scene.coordinateSpace.bounds
+                for window in scene.windows {
+                    if window.frame != bounds {
+                        window.frame = bounds
+                    }
+                    if let vc = window.rootViewController {
+                        vc.view.frame = bounds
+                        vc.view.setNeedsLayout()
+                        vc.view.layoutIfNeeded()
+                    }
+                }
+            }
+        }
+
         refreshOrientations()
+        relayoutWindows()
 
         let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: mask)
         for scene in scenes {
@@ -42,8 +62,12 @@ enum OrientationHelper {
             }
         }
 
-        // cover / sheet 转场期间几何更新可能被系统忽略，隔两拍再刷新一次方向约束兜底
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { refreshOrientations() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { refreshOrientations() }
+        // cover / sheet 转场期间几何更新可能被系统忽略，隔两拍再刷新方向约束并重排兜底
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            refreshOrientations(); relayoutWindows()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            refreshOrientations(); relayoutWindows()
+        }
     }
 }
