@@ -66,6 +66,10 @@ final class LivePlayerController: ObservableObject {
         player.delegate = nil
         player.stop()
         player.media = nil
+        // 复位加载 / 失败 / 播放状态，避免黑屏未出帧退出后遮罩和控件残留在列表上
+        playing = false
+        loading = false
+        failed = false
     }
 
     private func activateAudio() {
@@ -114,47 +118,52 @@ struct LiveStreamPlayer: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.ignoresSafeArea()
 
-                VLCVideoView(player: controller.player, mode: liveMode, safeArea: liveSafeArea, aspect: nil, tick: layoutTick)
-                    .ignoresSafeArea()
+            VLCVideoView(player: controller.player, mode: liveMode, safeArea: liveSafeArea, aspect: nil, tick: layoutTick)
+                .ignoresSafeArea()
 
-                // 透明手势层：点画面切换控制条，点面板外关闭面板
-                Color.clear
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if openPanel != nil {
-                            openPanel = nil
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+            // 控件 / 手势层单独包在 GeometryReader 里；外层用 ZStack 撑满全屏，
+            // 避免根容器是 GeometryReader 时在黑屏未出帧的情况下把尺寸算成半高，
+            // 退场后留下半屏黑底和控件叠在列表上。
+            GeometryReader { geo in
+                ZStack {
+                    // 透明手势层：点画面切换控制条，点面板外关闭面板
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if openPanel != nil {
+                                openPanel = nil
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                            }
                         }
+
+                    if controller.loading {
+                        loadingOverlay
                     }
 
-                if controller.loading {
-                    loadingOverlay
-                }
+                    if controller.failed {
+                        failedOverlay
+                    }
 
-                if controller.failed {
-                    failedOverlay
-                }
+                    if showControls {
+                        controlsOverlay(insets: geo.safeAreaInsets)
+                    }
 
-                if showControls {
-                    controlsOverlay(insets: geo.safeAreaInsets)
+                    if let panel = openPanel {
+                        panelOverlay(panel, insets: geo.safeAreaInsets)
+                    }
                 }
-
-                if let panel = openPanel {
-                    panelOverlay(panel, insets: geo.safeAreaInsets)
+                .onChange(of: geo.size) { _ in
+                    // 转屏后容器尺寸变了，逼 VLC 渲染层按新尺寸重新铺满
+                    layoutTick += 1
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { layoutTick += 1 }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
                 }
             }
-            .onChange(of: geo.size) { _ in
-                // 转屏后容器尺寸变了，逼 VLC 渲染层按新尺寸重新铺满
-                layoutTick += 1
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { layoutTick += 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
-            }
+            .ignoresSafeArea()
         }
         .onAppear {
             landscape = true
