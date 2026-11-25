@@ -174,10 +174,10 @@ struct LiveStreamPlayer: View {
             openPanel = nil
             controller.stop()
             UIApplication.shared.isIdleTimerDisabled = false
-            // 不立刻转竖屏：退场动画期间请求方向更新会和 cover 退场并发，容易把页面卡在中间帧。
-            // 等退场跑完再转回竖屏，并兜底摘掉可能残留的渲染容器。
+            // 先把方向锁切回竖屏（几何更新由 OrientationHelper 分拍兜底刷新），
+            // 退场动画跑完后再兜底摘掉可能残留的渲染容器与最后一帧。
+            OrientationHelper.apply(.portrait)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                OrientationHelper.apply(.portrait)
                 Self.purgeResidualLiveContainers()
             }
         }
@@ -470,14 +470,24 @@ struct LiveStreamPlayer: View {
         selectSource(next)
     }
 
-    /// 退场动画结束后兜底：把万一还挂在窗口上的 VLC 渲染容器摘掉，避免画面残影叠回列表
+    /// 退场动画结束后兜底：把万一还挂在窗口上的 VLC 渲染容器连同最后一帧一起摘掉，避免残影叠回列表
     private static func purgeResidualLiveContainers() {
         let windows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
+
+        func clearLayers(_ layer: CALayer) {
+            if layer.contents != nil { layer.contents = nil }
+            layer.sublayers?.forEach(clearLayers)
+        }
+
         func walk(_ v: UIView) {
             for sub in v.subviews {
-                if sub is VLCPlayerContainer { sub.removeFromSuperview() }
+                if sub is VLCPlayerContainer {
+                    clearLayers(sub.layer)
+                    sub.removeFromSuperview()
+                    continue
+                }
                 walk(sub)
             }
         }

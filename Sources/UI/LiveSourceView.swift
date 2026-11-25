@@ -103,13 +103,16 @@ struct LiveSourceView: View {
         }
         .navigationViewStyle(.stack)
         .tint(theme.accent)
+        .onAppear { OrientationHelper.apply(.portrait) }
         .safeAreaInset(edge: .bottom) { bottomTabBar }
         .sheet(isPresented: $showAddChannel) {
             ChannelForm(mode: .single, targetPlaylistID: store.activePlaylist?.id)
         }
         .sheet(item: $editing) { ChannelForm(mode: .edit, existing: $0) }
         .sheet(isPresented: $showAddPlaylist) { PlaylistForm() }
-        .fullScreenCover(item: $active) { LiveStreamPlayer(channel: $0) }
+        .fullScreenCover(item: $active, onDismiss: { OrientationHelper.apply(.portrait) }) {
+            LiveStreamPlayer(channel: $0)
+        }
         .alert("清空最近看过的记录？", isPresented: $showClearHistory) {
             Button("取消", role: .cancel) { }
             Button("清空", role: .destructive) { store.clearHistory() }
