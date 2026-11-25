@@ -56,6 +56,11 @@ struct VodSourceManagerView: View {
                             Image(systemName: "square.and.arrow.up")
                         }
                         Button {
+                            showFileImporter = true
+                        } label: {
+                            Image(systemName: "folder.badge.plus")
+                        }
+                        Button {
                             showForm = true
                         } label: {
                             Image(systemName: "plus")

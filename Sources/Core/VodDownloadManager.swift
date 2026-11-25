@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import CommonCrypto
 
 /// 点播剧集离线下载：把 HLS(m3u8) 分片按顺序拼接成单个 .ts，或把直连视频文件直接存入本地片库。
 /// 下载完成后文件进入 Documents/Media，本地播放器可直接离线播放。
@@ -24,12 +23,13 @@ final class VodDownloadManager: ObservableObject {
     }
 
     /// 一条已登记的下载记录（下载管理页用）
-    struct DownloadRecord: Codable, Equatable {
+    struct DownloadRecord: Codable, Equatable, Identifiable {
         var url: String
         var title: String
         var episodeName: String
         var fileName: String
         var addedAt: Date
+        var id: String { url }
     }
 
     static let shared = VodDownloadManager()
@@ -48,6 +48,7 @@ final class VodDownloadManager: ObservableObject {
             return decoded
         }
         set {
+            objectWillChange.send()
             if let data = try? JSONEncoder().encode(newValue) {
                 UserDefaults.standard.set(data, forKey: registryKey)
             }
@@ -364,7 +365,7 @@ final class VodDownloadManager: ObservableObject {
         for rawLine in playlist.split(separator: "\n") {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard !line.hasPrefix("#"), !line.isEmpty else { continue }
-            return resolve(line, base: base)
+            return Self.resolve(line, base: base)
         }
         return nil
     }
@@ -373,7 +374,7 @@ final class VodDownloadManager: ObservableObject {
         playlist.split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.hasPrefix("#") && !$0.isEmpty }
-            .map { resolve($0, base: base) }
+            .map { Self.resolve($0, base: base) }
     }
 
     private func parseMediaSequence(_ playlist: String) -> Int {
@@ -386,7 +387,7 @@ final class VodDownloadManager: ObservableObject {
         return 0
     }
 
-    private func resolve(_ reference: String, base: String) -> String {
+    private static func resolve(_ reference: String, base: String) -> String {
         guard let baseURL = URL(string: base),
               let resolved = URL(string: reference, relativeTo: baseURL) else {
             return reference
@@ -475,25 +476,7 @@ final class VodDownloadManager: ObservableObject {
     }
 
     private static func decrypt(segment: Data, key: Data, iv: Data) -> Data? {
-        guard key.count == 16, iv.count == 16 else { return nil }
-        var out = Data(count: segment.count + kCCBlockSizeAES128)
-        var outLen = 0
-        let status = key.withUnsafeBytes { k in
-            iv.withUnsafeBytes { i in
-                segment.withUnsafeBytes { s in
-                    CCCryptor(CCOperation(kCCDecrypt),
-                              CCAlgorithm(kCCAlgorithmAES128),
-                              CCOptions(kCCOptionPKCS7Padding),
-                              k.baseAddress, key.count,
-                              i.baseAddress,
-                              s.baseAddress, segment.count,
-                              out.mutableBytes, out.count, &outLen)
-                }
-            }
-        }
-        guard status == kCCSuccess else { return nil }
-        out.count = outLen
-        return out
+        AESHelper.aes128CbcDecrypt(segment, key: key, iv: iv)
     }
 
     // MARK: - 内容识别
@@ -526,7 +509,7 @@ final class VodDownloadManager: ObservableObject {
         ]
         for pattern in absolutePatterns {
             if let r = html.range(of: pattern, options: .regularExpression) {
-                return resolve(String(html[r]), base: base)
+                return Self.resolve(String(html[r]), base: base)
             }
         }
         let relativePatterns = [
@@ -536,7 +519,7 @@ final class VodDownloadManager: ObservableObject {
         for pattern in relativePatterns {
             if let r = html.range(of: pattern, options: .regularExpression) {
                 let ref = String(html[r])
-                if !ref.contains("://") { return resolve(ref, base: base) }
+                if !ref.contains("://") { return Self.resolve(ref, base: base) }
             }
         }
         return nil
