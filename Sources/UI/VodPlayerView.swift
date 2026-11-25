@@ -185,6 +185,15 @@ struct VodPlayerView: View {
         currentSeconds = clamped
     }
 
+    /// 竖屏 / 横屏全屏手动切换，切完逼渲染层按新尺寸重排
+    private func toggleOrientation() {
+        landscape.toggle()
+        OrientationHelper.apply(landscape ? .landscapeRight : .portrait)
+        layoutTick += 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { layoutTick += 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
+    }
+
     private func format(_ seconds: Double) -> String {
         let total = Int(max(0, seconds))
         let h = total / 3600
@@ -410,11 +419,7 @@ struct VodPlayerView: View {
 
             // 横屏 / 竖屏切换
             Button {
-                landscape.toggle()
-                OrientationHelper.apply(landscape ? .landscapeRight : .portrait)
-                layoutTick += 1
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { layoutTick += 1 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
+                toggleOrientation()
             } label: {
                 Image(systemName: landscape ? "rectangle.portrait.and.arrow.right" : "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 15, weight: .semibold))
@@ -430,7 +435,7 @@ struct VodPlayerView: View {
         .padding(.trailing, 16 + insets.trailing)
     }
 
-    /// 当前剧集离线下载按钮：未下载 / 下载中（点按取消）/ 已完成 / 失败重试
+    /// 当前剧集离线下载按钮：未下载 / 下载中（暂停）/ 已暂停（继续）/ 已完成 / 失败重试
     private func downloadButton() -> some View {
         let state = downloads.state(for: target.url)
         switch state.status {
@@ -449,7 +454,7 @@ struct VodPlayerView: View {
 
         case .downloading:
             return AnyView(Button {
-                downloads.cancel(target.url)
+                downloads.pause(target.url)
             } label: {
                 HStack(spacing: 5) {
                     ProgressView()
@@ -464,6 +469,19 @@ struct VodPlayerView: View {
                 .frame(width: 38, height: 38)
                 .background(Color.black.opacity(0.45))
                 .clipShape(Circle())
+            }
+            .buttonStyle(.plain))
+
+        case .paused:
+            return AnyView(Button {
+                downloads.resume(target.url)
+            } label: {
+                Image(systemName: "play.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(theme.accent)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
             }
             .buttonStyle(.plain))
 
@@ -554,6 +572,21 @@ struct VodPlayerView: View {
                         .font(.system(size: 24))
                         .foregroundColor(.white)
                         .frame(width: 48, height: 48)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // 竖屏 / 横屏全屏切换
+                Button {
+                    toggleOrientation()
+                } label: {
+                    Image(systemName: landscape ? "rectangle.portrait.and.arrow.right" : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.black.opacity(0.45))
+                        .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
             }

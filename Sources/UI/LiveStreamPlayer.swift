@@ -96,6 +96,9 @@ struct LiveStreamPlayer: View {
     @State private var liveMode: VideoMode = VideoMode(rawValue: UserDefaults.standard.string(forKey: "liveVideoMode") ?? "fill") ?? .fill
     @State private var liveSafeArea: Bool = UserDefaults.standard.object(forKey: "liveVideoSafeArea") as? Bool ?? false
 
+    /// 当前是否横屏：可手动在竖屏 / 横屏全屏之间切换
+    @State private var landscape = true
+
     /// 顶栏下拉面板改成自绘：系统 Menu 在横屏全屏里弹出 / 收起会带一次整体重排，画面跟着闪
     private enum LivePanel {
         case aspect
@@ -153,6 +156,7 @@ struct LiveStreamPlayer: View {
             }
         }
         .onAppear {
+            landscape = true
             OrientationHelper.apply(.landscapeRight)
             // requestGeometryUpdate 在 fullScreenCover 刚出现时经常被系统忽略，隔两拍再要两次
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { OrientationHelper.apply(.landscapeRight) }
@@ -316,13 +320,15 @@ struct LiveStreamPlayer: View {
                 }
                 .buttonStyle(.plain)
 
-                // 系统偶尔会拒绝自动转屏（尤其开着竖屏方向锁时），给一个手动强制横屏的入口
+                // 竖屏 / 横屏全屏手动切换：系统偶尔会拒绝自动转屏（尤其开着竖屏方向锁时）
                 Button {
-                    OrientationHelper.apply(.landscapeRight)
+                    landscape.toggle()
+                    OrientationHelper.apply(landscape ? .landscapeRight : .portrait)
                     layoutTick += 1
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { layoutTick += 1 }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { layoutTick += 1 }
                 } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    Image(systemName: landscape ? "rectangle.portrait.and.arrow.right" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 44, height: 44)

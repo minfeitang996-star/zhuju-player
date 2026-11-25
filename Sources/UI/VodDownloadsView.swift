@@ -28,8 +28,11 @@ struct VodDownloadsView: View {
     }
 
     private func isActive(_ url: String) -> Bool {
-        guard let task = manager.tasks[url], case .downloading = task.status else { return false }
-        return true
+        guard let task = manager.tasks[url] else { return false }
+        switch task.status {
+        case .downloading, .paused: return true
+        default: return false
+        }
     }
 
     private func statusText(_ record: Record) -> String {
@@ -38,6 +41,9 @@ struct VodDownloadsView: View {
             case .downloading:
                 let pct = Int((task.progress * 100).rounded())
                 return task.total > 0 ? "下载中 \(pct)%（\(task.done)/\(task.total)）" : "下载中…"
+            case .paused:
+                let pct = Int((task.progress * 100).rounded())
+                return task.total > 0 ? "已暂停 \(pct)%（\(task.done)/\(task.total)）" : "已暂停"
             case .failed(let message):
                 return message
             case .done:
@@ -123,6 +129,7 @@ struct VodDownloadsView: View {
 
     private func activeRow(_ record: Record) -> some View {
         let task = manager.tasks[record.url]
+        let paused = task?.status == .paused
         return VStack(alignment: .leading, spacing: 8) {
             rowHeader(record)
 
@@ -134,6 +141,23 @@ struct VodDownloadsView: View {
                     .font(.system(size: 11.5))
                     .foregroundColor(.white.opacity(0.5))
                 Spacer()
+                if paused {
+                    Button {
+                        manager.resume(record.url)
+                    } label: {
+                        Label("继续", systemImage: "play.circle")
+                            .font(.system(size: 12.5, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        manager.pause(record.url)
+                    } label: {
+                        Label("暂停", systemImage: "pause.circle")
+                            .font(.system(size: 12.5, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                }
                 Button(role: .destructive) {
                     manager.cancel(record.url)
                 } label: {

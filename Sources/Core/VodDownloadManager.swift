@@ -9,6 +9,7 @@ final class VodDownloadManager: ObservableObject {
     enum Status: Equatable {
         case idle
         case downloading
+        case paused
         case done
         case failed(String)
     }
@@ -56,6 +57,29 @@ final class VodDownloadManager: ObservableObject {
     }
 
     private var cancelFlags = Set<String>()
+    private var pauseFlags = Set<String>()
+
+    /// HLS 断点续写上下文：暂停时保留已落盘分片数与临时文件，继续时从断点接着拼
+    private struct HLSResume {
+        var segments: [String]
+        var completed: Int
+        var tempURL: URL
+        var keyInfo: KeyInfo?
+        var mediaSeq: Int
+        var baseName: String
+    }
+    private var hlsResume: [String: HLSResume] = [:]
+
+    /// 直连文件断点续传上下文：保留临时文件与已接收字节数
+    private struct SingleResume {
+        var url: String
+        var baseName: String
+        var ext: String
+        var tempURL: URL
+        var received: Int64
+    }
+    private var singleResume: [String: SingleResume] = [:]
+
     private let ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
     /// 可直接整文件下载的容器后缀
@@ -67,12 +91,23 @@ final class VodDownloadManager: ObservableObject {
     private init() {
         migrateLegacy()
         migrateDownloadedFiles()
+        cleanupOrphanTempFiles()
         // 启动时把已完成的登记恢复成 done；文件若已被手动删除则回退 idle
         var restored: [String: TaskState] = [:]
         for rec in records.values where fileExists(rec) {
             restored[rec.url] = TaskState(status: .done, progress: 1, done: 1, total: 1, fileName: rec.fileName)
         }
         tasks = restored
+    }
+
+    /// 进程重启后内存里的断点上下文已丢失，根目录残留的 `.downloading.*` 半成品无法续写，直接清掉
+    private func cleanupOrphanTempFiles() {
+        let fm = FileManager.default
+        let root = MediaLibrary.shared.root
+        guard let entries = try? fm.contentsOfDirectory(atPath: root.path) else { return }
+        for name in entries where name.hasPrefix(".downloading") {
+            try? fm.removeItem(at: root.appendingPathComponent(name))
+        }
     }
 
     // MARK: - 下载记录（下载管理页）
@@ -95,6 +130,13 @@ final class VodDownloadManager: ObservableObject {
     /// 删除一条记录：先取消进行中的任务，再删本地文件并清登记
     func removeRecord(_ url: String) {
         cancelFlags.insert(url)
+        pauseFlags.remove(url)
+        if let hls = hlsResume.removeValue(forKey: url) {
+            try? FileManager.default.removeItem(at: hls.tempURL)
+        }
+        if let single = singleResume.removeValue(forKey: url) {
+            try? FileManager.default.removeItem(at: single.tempURL)
+        }
         var reg = records
         if let rec = reg.removeValue(forKey: url) {
             let target = fileURL(for: rec)
@@ -118,21 +160,49 @@ final class VodDownloadManager: ObservableObject {
         return TaskState(status: .idle, progress: 0, done: 0, total: 0, fileName: nil)
     }
 
-    /// 开始下载；已在下载或已完成时直接返回
+    /// 开始下载；已在下载或已完成时直接返回。已暂停的任务走续传。
     func download(title: String, episodeName: String, sourceURL: String) {
         guard !sourceURL.isEmpty else { return }
         let current = state(for: sourceURL)
         if case .downloading = current.status { return }
         if case .done = current.status { return }
+        if case .paused = current.status {
+            resume(sourceURL)
+            return
+        }
         cancelFlags.remove(sourceURL)
+        pauseFlags.remove(sourceURL)
         upsertRecord(url: sourceURL, title: title, episodeName: episodeName,
                      fileName: records[sourceURL]?.fileName ?? "")
         Task { await run(title: title, episodeName: episodeName, sourceURL: sourceURL) }
     }
 
+    /// 暂停下载：保留半成品与断点，可继续接着下
+    func pause(_ key: String) {
+        pauseFlags.insert(key)
+    }
+
+    /// 继续下载：优先按内存里的断点上下文续写；上下文已失（重启后）则整段重下
+    func resume(_ key: String) {
+        pauseFlags.remove(key)
+        cancelFlags.remove(key)
+        if hlsResume[key] != nil {
+            Task { await resumeHLS(key: key) }
+            return
+        }
+        if let single = singleResume[key] {
+            Task { await resumeSingle(key: key, ctx: single) }
+            return
+        }
+        if let rec = records[key] {
+            Task { await run(title: rec.title, episodeName: rec.episodeName, sourceURL: key) }
+        }
+    }
+
     /// 取消进行中的下载（保留半成品清理由任务内负责）
     func cancel(_ key: String) {
         cancelFlags.insert(key)
+        pauseFlags.remove(key)
     }
 
     // MARK: - 下载流程
@@ -204,41 +274,112 @@ final class VodDownloadManager: ObservableObject {
         }
     }
 
-    /// 直连整文件下载
+    /// 直连整文件下载：已有整包数据直接落地；无整包时写临时文件，支持暂停后按 Range 续传
     private func downloadSingleFile(key: String, baseName: String, ext: String,
                                     url: String, seed: Data? = nil) async {
         setState(key, status: .downloading, progress: 0, done: 0, total: 1, fileName: nil)
 
-        var data = seed
-        if data == nil {
-            for attempt in 0..<2 {
-                do {
-                    data = try await fetchBytes(url)
-                    break
-                } catch {
-                    if attempt == 1 { break }
-                }
-            }
+        // 已有内存断点上下文（续传）
+        if let existing = singleResume[key] {
+            await resumeSingle(key: key, ctx: existing)
+            return
         }
-        guard let data else {
+
+        // 整包已在内存：直接落地，避免再叠加 Range 造成字节错位
+        if let seed {
+            let dest = finalDestination(baseName: baseName, ext: ext, existingFileName: records[key]?.fileName)
+            do {
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try? FileManager.default.removeItem(at: dest)
+                }
+                try seed.write(to: dest, options: .atomic)
+                register(key, fileName: dest.lastPathComponent)
+                setState(key, status: .done, progress: 1, done: 1, total: 1, fileName: dest.lastPathComponent)
+            } catch {
+                markFailed(key, message: "写入本地失败", done: 0, total: 1)
+            }
+            return
+        }
+
+        let tempURL = MediaLibrary.shared.root
+            .appendingPathComponent(".\(UUID().uuidString).downloading.\(ext)")
+        FileManager.default.createFile(atPath: tempURL.path, contents: nil)
+        let ctx = SingleResume(url: url, baseName: baseName, ext: ext,
+                               tempURL: tempURL, received: 0)
+        singleResume[key] = ctx
+        await resumeSingle(key: key, ctx: ctx)
+    }
+
+    /// 直连文件续传：优先用 Range 从已落盘字节接着拉；服务端不支持 Range（返回 200）时清空重下
+    private func resumeSingle(key: String, ctx: SingleResume) async {
+        var ctx = ctx
+        setState(key, status: .downloading, progress: 0, done: 0, total: 1, fileName: nil)
+
+        if !FileManager.default.fileExists(atPath: ctx.tempURL.path) {
+            FileManager.default.createFile(atPath: ctx.tempURL.path, contents: nil)
+            ctx.received = 0
+        }
+
+        let data: Data
+        let http: HTTPURLResponse
+        do {
+            (data, http) = try await fetchBytesRange(ctx.url, offset: ctx.received)
+        } catch {
+            try? FileManager.default.removeItem(at: ctx.tempURL)
+            singleResume.removeValue(forKey: key)
             markFailed(key, message: "连不上下载地址", done: 0, total: 1)
             return
         }
 
-        let dest = finalDestination(baseName: baseName, ext: ext, existingFileName: records[key]?.fileName)
+        // 服务端不支持 Range（返回 200 整包）：清掉半成品，从 0 重写
+        if http.statusCode == 200, ctx.received > 0 {
+            ctx.received = 0
+            try? FileManager.default.removeItem(at: ctx.tempURL)
+            FileManager.default.createFile(atPath: ctx.tempURL.path, contents: nil)
+        }
+
+        if cancelFlags.contains(key) {
+            try? FileManager.default.removeItem(at: ctx.tempURL)
+            singleResume.removeValue(forKey: key)
+            setState(key, status: .idle, progress: 0, done: 0, total: 0, fileName: nil)
+            return
+        }
+        if pauseFlags.contains(key) {
+            singleResume[key] = ctx
+            setState(key, status: .paused, progress: 0, done: 0, total: 1, fileName: nil)
+            return
+        }
+
+        // 响应头在 fetchBytesRange 之外判断不了 200/206，这里按是否带 Range 简化：续传偏移为 0 即整包
+        guard let handle = try? FileHandle(forWritingTo: ctx.tempURL) else {
+            markFailed(key, message: "写入本地失败", done: 0, total: 1)
+            return
+        }
+        if ctx.received > 0 { handle.seekToEndOfFile() }
         do {
+            try handle.write(contentsOf: data)
+            ctx.received += Int64(data.count)
+            handle.close()
+            singleResume[key] = ctx
+
+            let dest = finalDestination(baseName: ctx.baseName, ext: ctx.ext,
+                                        existingFileName: records[key]?.fileName)
             if FileManager.default.fileExists(atPath: dest.path) {
                 try? FileManager.default.removeItem(at: dest)
             }
-            try data.write(to: dest, options: .atomic)
+            try FileManager.default.moveItem(at: ctx.tempURL, to: dest)
             register(key, fileName: dest.lastPathComponent)
+            singleResume.removeValue(forKey: key)
             setState(key, status: .done, progress: 1, done: 1, total: 1, fileName: dest.lastPathComponent)
         } catch {
+            try? handle.close()
+            try? FileManager.default.removeItem(at: ctx.tempURL)
+            singleResume.removeValue(forKey: key)
             markFailed(key, message: "写入本地失败", done: 0, total: 1)
         }
     }
 
-    /// HLS 下载：主播放列表 → 变体列表 → 分片顺序拼接为 .ts（含 AES-128 解密）
+    /// HLS 下载：主播放列表 → 变体列表 → 分片顺序拼接为 .ts（含 AES-128 解密），支持暂停后续写
     private func downloadHLS(key: String, baseName: String, playlistURL: String, seedBody: String? = nil) async {
         setState(key, status: .downloading, progress: 0, done: 0, total: 0, fileName: nil)
 
@@ -287,29 +428,63 @@ final class VodDownloadManager: ObservableObject {
         }
 
         let mediaSeq = parseMediaSequence(variantRaw)
-        let total = segments.count
         let tempURL = MediaLibrary.shared.root
             .appendingPathComponent(".\(UUID().uuidString).downloading.ts")
         FileManager.default.createFile(atPath: tempURL.path, contents: nil)
-        guard let handle = try? FileHandle(forWritingTo: tempURL) else {
-            markFailed(key, message: "无法写入本地存储", done: 0, total: total)
+
+        let ctx = HLSResume(segments: segments, completed: 0, tempURL: tempURL,
+                            keyInfo: keyInfo, mediaSeq: mediaSeq, baseName: baseName)
+        hlsResume[key] = ctx
+        await writeHLS(key: key, ctx: ctx)
+    }
+
+    /// 从内存断点续写 HLS：复用分片清单、密钥与已落盘的临时文件
+    private func resumeHLS(key: String) async {
+        guard let ctx = hlsResume[key] else {
+            if let rec = records[key] {
+                Task { await run(title: rec.title, episodeName: rec.episodeName, sourceURL: key) }
+            }
             return
         }
+        setState(key, status: .downloading,
+                 progress: Double(ctx.completed) / Double(max(1, ctx.segments.count)),
+                 done: ctx.completed, total: ctx.segments.count, fileName: nil)
+        await writeHLS(key: key, ctx: ctx)
+    }
 
-        var completed = 0
+    /// HLS 分片落盘循环：逐片下载解密追加；可被取消 / 暂停打断，暂停时保留断点
+    private func writeHLS(key: String, ctx: HLSResume) async {
+        var ctx = ctx
+        let total = ctx.segments.count
+        guard let handle = try? FileHandle(forWritingTo: ctx.tempURL) else {
+            markFailed(key, message: "无法写入本地存储", done: ctx.completed, total: total)
+            return
+        }
+        if ctx.completed > 0 { handle.seekToEndOfFile() }
+
         do {
-            for (index, segment) in segments.enumerated() {
+            for index in ctx.completed..<total {
                 if cancelFlags.contains(key) {
                     try? handle.close()
-                    try? FileManager.default.removeItem(at: tempURL)
+                    try? FileManager.default.removeItem(at: ctx.tempURL)
+                    hlsResume.removeValue(forKey: key)
                     setState(key, status: .idle, progress: 0, done: 0, total: 0, fileName: nil)
+                    return
+                }
+                if pauseFlags.contains(key) {
+                    try? handle.close()
+                    ctx.completed = index
+                    hlsResume[key] = ctx
+                    setState(key, status: .paused,
+                             progress: total > 0 ? Double(index) / Double(total) : 0,
+                             done: index, total: total, fileName: nil)
                     return
                 }
 
                 var segmentData: Data?
                 for attempt in 0..<2 {
                     do {
-                        segmentData = try await fetchBytes(segment)
+                        segmentData = try await fetchBytes(ctx.segments[index])
                         break
                     } catch {
                         if attempt == 1 { break }
@@ -317,8 +492,8 @@ final class VodDownloadManager: ObservableObject {
                 }
                 guard var segmentData else { throw DownloadError.segmentFailed(index + 1) }
 
-                if let keyInfo {
-                    let iv = keyInfo.iv(forSeq: mediaSeq + index)
+                if let keyInfo = ctx.keyInfo {
+                    let iv = keyInfo.iv(forSeq: ctx.mediaSeq + index)
                     guard let decrypted = Self.decrypt(segment: segmentData, key: keyInfo.keyData, iv: iv) else {
                         throw DownloadError.decryptFailed(index + 1)
                     }
@@ -326,24 +501,27 @@ final class VodDownloadManager: ObservableObject {
                 }
 
                 try handle.write(contentsOf: segmentData)
-                completed = index + 1
+                ctx.completed = index + 1
+                hlsResume[key] = ctx
                 setState(key, status: .downloading,
-                         progress: Double(completed) / Double(total),
-                         done: completed, total: total, fileName: nil)
+                         progress: Double(ctx.completed) / Double(total),
+                         done: ctx.completed, total: total, fileName: nil)
             }
 
             try handle.close()
-            let dest = finalDestination(baseName: baseName, ext: "ts", existingFileName: records[key]?.fileName)
+            let dest = finalDestination(baseName: ctx.baseName, ext: "ts", existingFileName: records[key]?.fileName)
             if FileManager.default.fileExists(atPath: dest.path) {
                 try? FileManager.default.removeItem(at: dest)
             }
-            try FileManager.default.moveItem(at: tempURL, to: dest)
+            try FileManager.default.moveItem(at: ctx.tempURL, to: dest)
             register(key, fileName: dest.lastPathComponent)
+            hlsResume.removeValue(forKey: key)
             setState(key, status: .done, progress: 1, done: total, total: total, fileName: dest.lastPathComponent)
         } catch {
             try? handle.close()
-            try? FileManager.default.removeItem(at: tempURL)
-            markFailed(key, message: "分片下载中断，已清理半成品", done: completed, total: total)
+            try? FileManager.default.removeItem(at: ctx.tempURL)
+            hlsResume.removeValue(forKey: key)
+            markFailed(key, message: "分片下载中断，已清理半成品", done: ctx.completed, total: total)
         }
     }
 
@@ -364,6 +542,21 @@ final class VodDownloadManager: ObservableObject {
         guard let http = response as? HTTPURLResponse else { throw DownloadError.badResponse }
         guard (200...299).contains(http.statusCode) else { throw DownloadError.badResponse }
         return data
+    }
+
+    /// 带 Range 的文件续传请求；返回响应便于判断 200（不支持断点）还是 206（支持断点）
+    private func fetchBytesRange(_ urlString: String, offset: Int64) async throws -> (Data, HTTPURLResponse) {
+        guard let url = URL(string: urlString) else { throw DownloadError.badURL }
+        var request = URLRequest(url: url)
+        request.setValue(ua, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 30
+        if offset > 0 {
+            request.setValue("bytes=\(offset)-", forHTTPHeaderField: "Range")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw DownloadError.badResponse }
+        guard (200...299).contains(http.statusCode) else { throw DownloadError.badResponse }
+        return (data, http)
     }
 
     // MARK: - 播放列表解析
