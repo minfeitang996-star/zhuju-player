@@ -290,12 +290,15 @@ struct LibraryView: View {
         library.entries(in: currentFolder)
     }
 
-    /// 文件夹（始终排在前面，不参与搜索过滤）
+    /// 文件夹（始终排在前面，不参与搜索过滤）；点播下载目录不在主页文件夹里露出，统一走「下载管理」
     private var folderEntries: [LibraryEntry] {
-        entries.compactMap { entry -> URL? in
+        let downloadsPath = MediaLibrary.shared.downloadsFolder.standardFileURL.path
+        return entries.compactMap { entry -> URL? in
             if case .folder(let url, _) = entry { return url }
             return nil
-        }.map { LibraryEntry.folder($0, library.videoCount(in: $0)) }
+        }
+        .filter { $0.standardFileURL.path != downloadsPath }
+        .map { LibraryEntry.folder($0, library.videoCount(in: $0)) }
     }
 
     /// 搜索过滤 + 排序后的视频
@@ -442,18 +445,6 @@ struct LibraryView: View {
                 .listRowBackground(Color.clear)
             }
 
-            if path.isEmpty {
-                Button {
-                    showDownloads = true
-                } label: {
-                    downloadsRow
-                }
-                .buttonStyle(HomePressStyle(accent: theme.accent))
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                .listRowBackground(Color.clear)
-            }
-
             if !folderEntries.isEmpty {
                 sectionHeader("文件夹", count: folderEntries.count)
 
@@ -517,6 +508,18 @@ struct LibraryView: View {
                         videoListRow(item)
                     }
                 }
+            }
+
+            if path.isEmpty {
+                Button {
+                    showDownloads = true
+                } label: {
+                    downloadsRow
+                }
+                .buttonStyle(HomePressStyle(accent: theme.accent))
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                .listRowBackground(Color.clear)
             }
         }
         .listStyle(.plain)
@@ -777,6 +780,13 @@ struct LibraryView: View {
             .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 3)
     }
 
+    private var activeDownloadState: VodDownloadManager.TaskState? {
+        downloads.tasks.values.first { state in
+            if case .downloading = state.status { return true }
+            return false
+        }
+    }
+
     private var downloadSummary: String {
         let done = downloads.allRecords.filter { downloads.fileExists($0) }.count
         let active = downloads.tasks.values.contains {
@@ -789,32 +799,43 @@ struct LibraryView: View {
     }
 
     private var downloadsRow: some View {
-        HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LinearGradient(
-                    colors: [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ))
-                .frame(width: 54, height: 54)
-                .overlay(Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(theme.accent))
+        let active = activeDownloadState != nil
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: active
+                            ? [theme.accent, theme.accent.opacity(0.72)]
+                            : [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 54, height: 54)
+                    .overlay(Image(systemName: active ? "arrow.down.circle.fill" : "arrow.down.circle")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(active ? .white : theme.accent))
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text("下载管理")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Text(downloadSummary)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.45))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("下载管理")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(downloadSummary)
+                        .font(.system(size: 12))
+                        .foregroundColor(active ? theme.accent : .white.opacity(0.45))
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.22))
             }
 
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.22))
+            if let state = activeDownloadState {
+                ProgressView(value: state.progress)
+                    .tint(theme.accent)
+                    .progressViewStyle(.linear)
+            }
         }
         .padding(14)
         .background(cardBackground(cornerRadius: 20))

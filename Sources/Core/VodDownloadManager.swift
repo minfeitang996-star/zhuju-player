@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 /// 点播剧集离线下载：把 HLS(m3u8) 分片按顺序拼接成单个 .ts，或把直连视频文件直接存入本地片库。
 /// 下载完成后文件进入 Documents/Media，本地播放器可直接离线播放。
@@ -58,6 +59,9 @@ final class VodDownloadManager: ObservableObject {
 
     private var cancelFlags = Set<String>()
     private var pauseFlags = Set<String>()
+
+    /// 后台任务号：下载进行期间申请，让 App 切到别的 App 后仍有一段后台执行窗口
+    private var bgTaskID: UIBackgroundTaskIdentifier = .invalid
 
     /// HLS 断点续写上下文：暂停时保留已落盘分片数与临时文件，继续时从断点接着拼
     private struct HLSResume {
@@ -145,6 +149,7 @@ final class VodDownloadManager: ObservableObject {
         records = reg
         tasks.removeValue(forKey: url)
         MediaLibrary.shared.reload()
+        syncBackgroundKeep()
     }
 
     // MARK: - 对外接口
@@ -203,6 +208,48 @@ final class VodDownloadManager: ObservableObject {
     func cancel(_ key: String) {
         cancelFlags.insert(key)
         pauseFlags.remove(key)
+    }
+
+    // MARK: - 后台保活
+
+    /// 有进行中下载时：静音循环保活 + 后台任务号，让切到微信等其他 App 后下载继续；
+    /// 全部完成 / 失败 / 暂停后释放保活与后台任务号。
+    private func syncBackgroundKeep() {
+        let active = tasks.values.contains { state in
+            if case .downloading = state.status { return true }
+            return false
+        }
+        if active {
+            BackgroundKeeper.shared.start()
+            beginBgTask()
+        } else {
+            BackgroundKeeper.shared.stop()
+            endBgTask()
+        }
+    }
+
+    private func beginBgTask() {
+        guard bgTaskID == .invalid else { return }
+        bgTaskID = UIApplication.shared.beginBackgroundTask(withName: "vod-download") { [weak self] in
+            // 系统给的后台时间将尽：把进行中任务挂起为暂停，保留分片 / 字节断点，回前台可继续
+            self?.suspendActiveDownloads()
+            self?.endBgTask()
+        }
+    }
+
+    private func endBgTask() {
+        guard bgTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(bgTaskID)
+        bgTaskID = .invalid
+    }
+
+    /// 后台窗口即将耗尽：给进行中任务打暂停标记，下载循环在下个分片 / 批次检查点停下并保留断点
+    private func suspendActiveDownloads() {
+        for (key, state) in tasks {
+            if case .downloading = state.status {
+                pauseFlags.insert(key)
+            }
+        }
     }
 
     // MARK: - 下载流程
@@ -732,6 +779,7 @@ final class VodDownloadManager: ObservableObject {
         let state = TaskState(status: status, progress: progress, done: doneCount,
                               total: totalCount, fileName: fileName)
         tasks[key] = state
+        syncBackgroundKeep()
     }
 
     private func markFailed(_ key: String, message: String, done: Int, total: Int) {
