@@ -7,6 +7,7 @@ struct VodDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = VodStore.shared
+    @ObservedObject private var downloads = VodDownloadManager.shared
     @AppStorage("themeID") private var themeID: String = "gold"
     private var theme: AppTheme { AppTheme.current(themeID) }
 
@@ -187,28 +188,86 @@ struct VodDetailView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
                 if let line = currentLine {
                     ForEach(line.episodes) { episode in
-                        Button {
-                            playTarget = VodPlayTarget(
-                                title: shownItem.name,
-                                episodeName: episode.name,
-                                url: episode.url,
-                                siteName: siteName,
-                                pic: shownItem.pic
-                            )
-                        } label: {
-                            Text(episode.name)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 11)
-                                .background(Color.white.opacity(0.07))
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        VStack(spacing: 5) {
+                            Button {
+                                playTarget = VodPlayTarget(
+                                    title: shownItem.name,
+                                    episodeName: episode.name,
+                                    url: episode.url,
+                                    siteName: siteName,
+                                    pic: shownItem.pic
+                                )
+                            } label: {
+                                Text(episode.name)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Color.white.opacity(0.07))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+
+                            downloadIndicator(for: episode)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func downloadIndicator(for episode: VodEpisode) -> some View {
+        let state = downloads.state(for: episode.url)
+        switch state.status {
+        case .idle:
+            Button {
+                downloads.download(title: shownItem.name, episodeName: episode.name, sourceURL: episode.url)
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.55))
+            }
+            .buttonStyle(.plain)
+
+        case .downloading:
+            Button {
+                downloads.cancel(episode.url)
+            } label: {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .tint(theme.accent)
+                        .scaleEffect(0.7)
+                    if state.total > 0 {
+                        Text("\(state.done)/\(state.total)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+        case .done:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 13))
+                .foregroundColor(theme.accent)
+
+        case .failed(let message):
+            Button {
+                downloads.download(title: shownItem.name, episodeName: episode.name, sourceURL: episode.url)
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.clockwise.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(.red)
+                    Text(message)
+                        .font(.system(size: 9))
+                        .foregroundColor(.red.opacity(0.8))
+                        .lineLimit(1)
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 

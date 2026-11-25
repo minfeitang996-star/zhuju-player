@@ -20,6 +20,7 @@ struct VodPlayerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = VodStore.shared
+    @ObservedObject private var downloads = VodDownloadManager.shared
     @AppStorage("themeID") private var themeID: String = "gold"
     private var theme: AppTheme { AppTheme.current(themeID) }
 
@@ -381,6 +382,8 @@ struct VodPlayerView: View {
             }
             .buttonStyle(.plain)
 
+            downloadButton()
+
             // 画面适配：适合 / 填充 / 拉伸
             Menu {
                 ForEach(VideoMode.allCases) { mode in
@@ -425,6 +428,66 @@ struct VodPlayerView: View {
         .padding(.top, 12 + insets.top)
         .padding(.leading, 16 + insets.leading)
         .padding(.trailing, 16 + insets.trailing)
+    }
+
+    /// 当前剧集离线下载按钮：未下载 / 下载中（点按取消）/ 已完成 / 失败重试
+    private func downloadButton() -> some View {
+        let state = downloads.state(for: target.url)
+        switch state.status {
+        case .idle:
+            return AnyView(Button {
+                downloads.download(title: target.title, episodeName: target.episodeName, sourceURL: target.url)
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain))
+
+        case .downloading:
+            return AnyView(Button {
+                downloads.cancel(target.url)
+            } label: {
+                HStack(spacing: 5) {
+                    ProgressView()
+                        .tint(theme.accent)
+                        .scaleEffect(0.8)
+                    if state.total > 0 {
+                        Text("\(Int(state.progress * 100))%")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white)
+                    }
+                }
+                .frame(width: 38, height: 38)
+                .background(Color.black.opacity(0.45))
+                .clipShape(Circle())
+            }
+            .buttonStyle(.plain))
+
+        case .done:
+            return AnyView(Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(theme.accent)
+                .frame(width: 38, height: 38)
+                .background(Color.black.opacity(0.45))
+                .clipShape(Circle()))
+
+        case .failed:
+            return AnyView(Button {
+                downloads.download(title: target.title, episodeName: target.episodeName, sourceURL: target.url)
+            } label: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.red)
+                    .frame(width: 38, height: 38)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain))
+        }
     }
 
     private func bottomBar(insets: EdgeInsets) -> some View {

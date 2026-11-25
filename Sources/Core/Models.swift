@@ -90,6 +90,9 @@ enum LibraryEntry: Identifiable {
 final class MediaLibrary: ObservableObject {
     @Published var items: [MediaItem] = []
 
+    /// 全局共享实例：点播下载完成后由管理器触发 reload，App 与下载管理器用同一个
+    static let shared = MediaLibrary()
+
     let root: URL
 
     /// VLC 能解码的常见容器格式，全部支持播放。

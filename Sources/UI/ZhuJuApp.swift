@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct ZhuJuApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var library = MediaLibrary()
+    @StateObject private var library = MediaLibrary.shared
 
     init() {
         Prefs.migrateLayoutDefaults()
