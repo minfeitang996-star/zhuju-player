@@ -286,9 +286,8 @@ struct VodPlayerView: View {
         scrubSettleUntil = Date().timeIntervalSince1970 + 0.5
         if scrubWasPlaying {
             // 等定位落地再恢复播放，避免边 seek 边起播互相抢解码
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
-                guard let self else { return }
-                self.controller.player.play()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [self] in
+                controller.player.play()
             }
         }
         if abs(delta) < 1 {
