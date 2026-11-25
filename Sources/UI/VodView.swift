@@ -17,6 +17,8 @@ struct VodView: View {
     @State private var keyword = ""
     @State private var selectedCategoryID: String?
     @State private var showSiteForm = false
+    @State private var showSourceManager = false
+    @State private var showDownloads = false
     @State private var route: VodRoute?
     @State private var requestTick = 0
     @FocusState private var searchFocused: Bool
@@ -56,6 +58,16 @@ struct VodView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
+                        Button {
+                            showDownloads = true
+                        } label: {
+                            Image(systemName: "arrow.down.circle")
+                        }
+                        Button {
+                            showSourceManager = true
+                        } label: {
+                            Image(systemName: "list.bullet.rectangle")
+                        }
                         if !store.sites.isEmpty {
                             siteMenu
                         }
@@ -69,6 +81,12 @@ struct VodView: View {
             }
             .sheet(isPresented: $showSiteForm) {
                 VodSiteForm()
+            }
+            .sheet(isPresented: $showSourceManager) {
+                VodSourceManagerView()
+            }
+            .sheet(isPresented: $showDownloads) {
+                VodDownloadsView()
             }
             .fullScreenCover(item: $route) { route in
                 switch route {
@@ -560,7 +578,7 @@ struct VodCover: View {
 
 // MARK: - 添加影视接口
 
-private struct VodSiteForm: View {
+struct VodSiteForm: View {
 
     enum Mode: Int {
         case site

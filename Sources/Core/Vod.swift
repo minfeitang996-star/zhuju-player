@@ -275,6 +275,43 @@ final class VodStore: ObservableObject {
         saveSites()
     }
 
+    /// 批量删除选中的源（多选模式用）
+    func deleteSites(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        sites.removeAll { ids.contains($0.id) }
+        if let current = activeSiteID, !sites.contains(where: { $0.id == current }) {
+            activeSiteID = sites.first?.id
+            saveActive()
+        }
+        saveSites()
+    }
+
+    /// 把配置导入结果批量落库；返回实际新增条数（同接口去重）
+    @discardableResult
+    func importSites(_ result: ConfigImportResult) -> Int {
+        var addedCount = 0
+        for entry in result.added {
+            if addSite(name: entry.name, api: entry.api, searchable: entry.searchable) != nil {
+                addedCount += 1
+            }
+        }
+        return addedCount
+    }
+
+    /// 把当前源清单导出为 TVBox 兼容 JSON（sites 数组），可存到「文件」后分享备份
+    func exportSitesData() -> Data? {
+        let payload: [[String: Any]] = sites.map { site in
+            [
+                "name": site.name,
+                "api": site.api,
+                "searchable": site.searchable ? 1 : 0,
+                "type": 1
+            ]
+        }
+        let json: [String: Any] = ["sites": payload]
+        return try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+    }
+
     func renameSite(_ id: UUID, name: String) {
         guard let idx = sites.firstIndex(where: { $0.id == id }) else { return }
         sites[idx].name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -286,35 +323,67 @@ final class VodStore: ObservableObject {
     ///   - data: 配置原文（允许带 `//`、`/* */` 注释的 JSONC）
     ///   - baseURL: 配置链接本身，用于把 `./xxx` 这类相对接口地址补成绝对地址
     static func parseConfig(data: Data, baseURL: URL?) -> ConfigImportResult {
-        guard let cleaned = stripJSONComments(data: data),
-              let json = try? JSONSerialization.jsonObject(with: cleaned) as? [String: Any] else {
-            return ConfigImportResult(added: [], crawlerSkipped: 0, invalidSkipped: 0)
-        }
-
-        // 兼容多个配置键：sites / urls / site
-        let candidates: [[String: Any]] =
-            (json["sites"] as? [[String: Any]] ?? []) +
-            (json["urls"] as? [[String: Any]] ?? []) +
-            (json["site"] as? [[String: Any]] ?? [])
-
         var added: [ImportedSite] = []
         var crawlerSkipped = 0
         var invalidSkipped = 0
 
-        for entry in candidates {
-            let rawAPI = (entry["api"] as? String) ?? (entry["url"] as? String) ?? ""
-            let name = (entry["name"] as? String) ?? (entry["title"] as? String) ?? ""
-            let type = entry["type"] as? Int ?? (entry["type"] as? Double).map { Int($0) }
+        // 1) 优先按 JSON / JSONC 解析
+        if let cleaned = stripJSONComments(data: data),
+           let any = try? JSONSerialization.jsonObject(with: cleaned) {
 
-            // type 3 是依赖 JS 引擎的 CSP / drpy 爬虫源，iOS 原生无法执行，跳过
-            if type == 3 { crawlerSkipped += 1; continue }
+            var candidates: [[String: Any]] = []
 
-            guard let api = Self.resolveAPI(rawAPI, base: baseURL), Self.isValidURL(api) else {
-                invalidSkipped += 1
-                continue
+            if let json = any as? [String: Any] {
+                // 兼容多个配置键：sites / urls / site
+                candidates =
+                    (json["sites"] as? [[String: Any]] ?? []) +
+                    (json["urls"] as? [[String: Any]] ?? []) +
+                    (json["site"] as? [[String: Any]] ?? [])
+
+                // 单个站点对象：{"name":..,"api":..} / {"url":..}
+                if candidates.isEmpty,
+                   let api = (json["api"] as? String) ?? (json["url"] as? String), !api.isEmpty {
+                    candidates.append(json)
+                }
+            } else if let array = any as? [[String: Any]] {
+                // 顶层就是站点数组
+                candidates = array
             }
-            let searchable = (entry["searchable"] as? Int ?? 1) != 0
-            added.append(ImportedSite(name: name, api: api, searchable: searchable))
+
+            for entry in candidates {
+                let rawAPI = (entry["api"] as? String) ?? (entry["url"] as? String) ?? ""
+                let name = (entry["name"] as? String) ?? (entry["title"] as? String) ?? ""
+                let type = entry["type"] as? Int ?? (entry["type"] as? Double).map { Int($0) }
+
+                // type 3 是依赖 JS 引擎的 CSP / drpy 爬虫源，iOS 原生无法执行，跳过
+                if type == 3 { crawlerSkipped += 1; continue }
+
+                guard let api = Self.resolveAPI(rawAPI, base: baseURL), Self.isValidURL(api) else {
+                    invalidSkipped += 1
+                    continue
+                }
+                let searchable = (entry["searchable"] as? Int ?? 1) != 0
+                added.append(ImportedSite(name: name, api: api, searchable: searchable))
+            }
+            if !candidates.isEmpty {
+                return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped)
+            }
+        }
+
+        // 2) 兜底：纯文本 / 换行分隔，每行一个接口地址（也兼容逗号分隔）
+        guard let text = String(data: data, encoding: .utf8) else {
+            return ConfigImportResult(added: [], crawlerSkipped: 0, invalidSkipped: invalidSkipped)
+        }
+        let lines = text.components(separatedBy: CharacterSet.newlines)
+            .flatMap { $0.components(separatedBy: ",") }
+        for line in lines {
+            let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !t.isEmpty else { continue }
+            if let api = Self.resolveAPI(t, base: baseURL), Self.isValidURL(api) {
+                added.append(ImportedSite(name: "", api: api, searchable: true))
+            } else {
+                invalidSkipped += 1
+            }
         }
         return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped)
     }

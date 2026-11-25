@@ -11,3 +11,9 @@ struct ShareSheet: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
+
+/// 供 `.sheet(item:)` 包装本地分享文件
+struct ShareFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}

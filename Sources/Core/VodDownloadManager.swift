@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CommonCrypto
 
 /// 点播剧集离线下载：把 HLS(m3u8) 分片按顺序拼接成单个 .ts，或把直连视频文件直接存入本地片库。
 /// 下载完成后文件进入 Documents/Media，本地播放器可直接离线播放。
@@ -22,14 +23,35 @@ final class VodDownloadManager: ObservableObject {
         var fileName: String?
     }
 
+    /// 一条已登记的下载记录（下载管理页用）
+    struct DownloadRecord: Codable, Equatable {
+        var url: String
+        var title: String
+        var episodeName: String
+        var fileName: String
+        var addedAt: Date
+    }
+
     static let shared = VodDownloadManager()
 
     @Published private(set) var tasks: [String: TaskState] = [:]
 
-    private let registryKey = "vodDownloadsV1"
-    private var registry: [String: String] {
-        get { UserDefaults.standard.dictionary(forKey: registryKey) as? [String: String] ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: registryKey) }
+    private let registryKey = "vodDownloadsV2"
+    private let legacyKey = "vodDownloadsV1"
+
+    private var records: [String: DownloadRecord] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: registryKey),
+                  let decoded = try? JSONDecoder().decode([String: DownloadRecord].self, from: data) else {
+                return [:]
+            }
+            return decoded
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: registryKey)
+            }
+        }
     }
 
     private var cancelFlags = Set<String>()
@@ -42,14 +64,43 @@ final class VodDownloadManager: ObservableObject {
     ]
 
     private init() {
+        migrateLegacy()
         // 启动时把已完成的登记恢复成 done；文件若已被手动删除则回退 idle
         var restored: [String: TaskState] = [:]
-        for (url, fileName) in registry {
-            if fileExists(fileName) {
-                restored[url] = TaskState(status: .done, progress: 1, done: 1, total: 1, fileName: fileName)
-            }
+        for rec in records.values where fileExists(rec) {
+            restored[rec.url] = TaskState(status: .done, progress: 1, done: 1, total: 1, fileName: rec.fileName)
         }
         tasks = restored
+    }
+
+    // MARK: - 下载记录（下载管理页）
+
+    /// 全部下载记录，新的在前
+    var allRecords: [DownloadRecord] {
+        records.values.sorted { $0.addedAt > $1.addedAt }
+    }
+
+    func record(for url: String) -> DownloadRecord? { records[url] }
+
+    func fileURL(for record: DownloadRecord) -> URL {
+        MediaLibrary.shared.root.appendingPathComponent(record.fileName)
+    }
+
+    func fileExists(_ record: DownloadRecord) -> Bool {
+        FileManager.default.fileExists(atPath: fileURL(for: record).path)
+    }
+
+    /// 删除一条记录：先取消进行中的任务，再删本地文件并清登记
+    func removeRecord(_ url: String) {
+        cancelFlags.insert(url)
+        var reg = records
+        if let rec = reg.removeValue(forKey: url) {
+            let target = fileURL(for: rec)
+            try? FileManager.default.removeItem(at: target)
+        }
+        records = reg
+        tasks.removeValue(forKey: url)
+        MediaLibrary.shared.reload()
     }
 
     // MARK: - 对外接口
@@ -57,8 +108,8 @@ final class VodDownloadManager: ObservableObject {
     /// 查询某一集（以播放地址为唯一标识）的下载状态
     func state(for key: String) -> TaskState {
         if let cached = tasks[key] { return cached }
-        if let name = registry[key], fileExists(name) {
-            let restored = TaskState(status: .done, progress: 1, done: 1, total: 1, fileName: name)
+        if let rec = records[key], fileExists(rec) {
+            let restored = TaskState(status: .done, progress: 1, done: 1, total: 1, fileName: rec.fileName)
             tasks[key] = restored
             return restored
         }
@@ -72,6 +123,8 @@ final class VodDownloadManager: ObservableObject {
         if case .downloading = current.status { return }
         if case .done = current.status { return }
         cancelFlags.remove(sourceURL)
+        upsertRecord(url: sourceURL, title: title, episodeName: episodeName,
+                     fileName: records[sourceURL]?.fileName ?? "")
         Task { await run(title: title, episodeName: episodeName, sourceURL: sourceURL) }
     }
 
@@ -84,26 +137,85 @@ final class VodDownloadManager: ObservableObject {
 
     private func run(title: String, episodeName: String, sourceURL: String) async {
         let baseName = Self.fileBase(title: title, episodeName: episodeName)
-        let ext = (sourceURL as NSString).pathExtension.lowercased()
 
-        if Self.directExtensions.contains(ext) {
-            await downloadSingleFile(key: sourceURL, baseName: baseName, ext: ext, url: sourceURL)
+        let data: Data
+        do {
+            data = try await fetchBytes(sourceURL)
+        } catch {
+            markFailed(sourceURL, message: "连不上下载地址", done: 0, total: 1)
+            return
+        }
+
+        let body = String(data: data, encoding: .utf8) ?? ""
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // HLS 播放列表（无论 URL 有没有 .m3u8 后缀，按内容识别）
+        if trimmed.hasPrefix("#EXTM3U") || trimmed.contains("#EXT-X-STREAM-INF") || trimmed.contains("#EXTINF") {
+            await downloadHLS(key: sourceURL, baseName: baseName, playlistURL: sourceURL, seedBody: body)
+            return
+        }
+
+        // 网页播放页：从 HTML 里提取内嵌的 m3u8 / mp4 地址，再跟一层
+        if looksLikeHTML(body) {
+            guard let extracted = Self.extractVideoURL(body, base: sourceURL) else {
+                markFailed(sourceURL, message: "网页里没解析到可下载的视频地址", done: 0, total: 1)
+                return
+            }
+            await resolveAndDownload(url: extracted, key: sourceURL, baseName: baseName,
+                                      title: title, episodeName: episodeName)
+            return
+        }
+
+        // 二进制视频 / 直连文件
+        let ext = Self.directExtension(from: sourceURL) ?? (dataIsVideo(data) ? "mp4" : nil)
+        if let ext {
+            await downloadSingleFile(key: sourceURL, baseName: baseName, ext: ext,
+                                     url: sourceURL, seed: data)
         } else {
-            await downloadHLS(key: sourceURL, baseName: baseName, playlistURL: sourceURL)
+            markFailed(sourceURL, message: "无法识别该播放地址的格式", done: 0, total: 1)
+        }
+    }
+
+    /// 网页提取出的地址再走一层判定（直连视频或二次播放列表）
+    private func resolveAndDownload(url: String, key: String, baseName: String,
+                                    title: String, episodeName: String) async {
+        let data: Data
+        do {
+            data = try await fetchBytes(url)
+        } catch {
+            markFailed(key, message: "连不上解析后的地址", done: 0, total: 1)
+            return
+        }
+        let body = String(data: data, encoding: .utf8) ?? ""
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.hasPrefix("#EXTM3U") || trimmed.contains("#EXTINF") {
+            await downloadHLS(key: key, baseName: baseName, playlistURL: url, seedBody: body)
+            return
+        }
+
+        let ext = Self.directExtension(from: url) ?? (dataIsVideo(data) ? "mp4" : nil)
+        if let ext {
+            await downloadSingleFile(key: key, baseName: baseName, ext: ext, url: url, seed: data)
+        } else {
+            markFailed(key, message: "解析后的地址仍不是可下载视频", done: 0, total: 1)
         }
     }
 
     /// 直连整文件下载
-    private func downloadSingleFile(key: String, baseName: String, ext: String, url: String) async {
+    private func downloadSingleFile(key: String, baseName: String, ext: String,
+                                    url: String, seed: Data? = nil) async {
         setState(key, status: .downloading, progress: 0, done: 0, total: 1, fileName: nil)
 
-        var data: Data?
-        for attempt in 0..<2 {
-            do {
-                data = try await fetchBytes(url)
-                break
-            } catch {
-                if attempt == 1 { break }
+        var data = seed
+        if data == nil {
+            for attempt in 0..<2 {
+                do {
+                    data = try await fetchBytes(url)
+                    break
+                } catch {
+                    if attempt == 1 { break }
+                }
             }
         }
         guard let data else {
@@ -121,17 +233,21 @@ final class VodDownloadManager: ObservableObject {
         }
     }
 
-    /// HLS 下载：主播放列表 → 变体列表 → 分片顺序拼接为 .ts
-    private func downloadHLS(key: String, baseName: String, playlistURL: String) async {
+    /// HLS 下载：主播放列表 → 变体列表 → 分片顺序拼接为 .ts（含 AES-128 解密）
+    private func downloadHLS(key: String, baseName: String, playlistURL: String, seedBody: String? = nil) async {
         setState(key, status: .downloading, progress: 0, done: 0, total: 0, fileName: nil)
 
         // 1. 拉取播放列表
         let masterRaw: String
-        do {
-            masterRaw = try await fetchText(playlistURL)
-        } catch {
-            markFailed(key, message: "连不上播放地址", done: 0, total: 0)
-            return
+        if let seedBody {
+            masterRaw = seedBody
+        } else {
+            do {
+                masterRaw = try await fetchText(playlistURL)
+            } catch {
+                markFailed(key, message: "连不上播放地址", done: 0, total: 0)
+                return
+            }
         }
 
         // 2. 若是主列表，取第一条变体地址再拉一次
@@ -150,13 +266,13 @@ final class VodDownloadManager: ObservableObject {
             variantRaw = masterRaw
         }
 
-        // 3. 加密检查：AES-128 暂不支持
-        for line in variantRaw.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("#EXT-X-KEY"), trimmed.contains("METHOD=AES-128") {
-                markFailed(key, message: "该线路有加密，暂不支持下载", done: 0, total: 0)
-                return
-            }
+        // 3. 加密信息（AES-128 取密钥并在分片落地前解密；NONE 明文直接拼接）
+        let keyInfo: KeyInfo?
+        do {
+            keyInfo = try await parseKey(variantRaw, base: variantBase)
+        } catch {
+            markFailed(key, message: "加密密钥获取失败，该线路无法下载", done: 0, total: 0)
+            return
         }
 
         let segments = segmentURLs(variantRaw, base: variantBase)
@@ -165,6 +281,7 @@ final class VodDownloadManager: ObservableObject {
             return
         }
 
+        let mediaSeq = parseMediaSequence(variantRaw)
         let total = segments.count
         let tempURL = MediaLibrary.shared.root
             .appendingPathComponent(".\(UUID().uuidString).downloading.ts")
@@ -193,7 +310,15 @@ final class VodDownloadManager: ObservableObject {
                         if attempt == 1 { break }
                     }
                 }
-                guard let segmentData else { throw DownloadError.segmentFailed(index + 1) }
+                guard var segmentData else { throw DownloadError.segmentFailed(index + 1) }
+
+                if let keyInfo {
+                    let iv = keyInfo.iv(forSeq: mediaSeq + index)
+                    guard let decrypted = Self.decrypt(segment: segmentData, key: keyInfo.keyData, iv: iv) else {
+                        throw DownloadError.decryptFailed(index + 1)
+                    }
+                    segmentData = decrypted
+                }
 
                 try handle.write(contentsOf: segmentData)
                 completed = index + 1
@@ -251,6 +376,16 @@ final class VodDownloadManager: ObservableObject {
             .map { resolve($0, base: base) }
     }
 
+    private func parseMediaSequence(_ playlist: String) -> Int {
+        for line in playlist.split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard t.hasPrefix("#EXT-X-MEDIA-SEQUENCE") else { continue }
+            let n = t.components(separatedBy: ":").last?.trimmingCharacters(in: .whitespaces)
+            return Int(n ?? "0") ?? 0
+        }
+        return 0
+    }
+
     private func resolve(_ reference: String, base: String) -> String {
         guard let baseURL = URL(string: base),
               let resolved = URL(string: reference, relativeTo: baseURL) else {
@@ -259,10 +394,160 @@ final class VodDownloadManager: ObservableObject {
         return resolved.absoluteString
     }
 
+    // MARK: - AES-128 解密
+
+    private struct KeyInfo {
+        let keyData: Data
+        let explicitIV: Data?
+
+        func iv(forSeq seq: Int) -> Data {
+            if let explicitIV { return explicitIV }
+            // 未显式给 IV 时，用媒体序列号作为 16 字节大端 IV（HLS 规范）
+            var iv = Data(count: 16)
+            var seqBE = UInt64(seq).bigEndian
+            let seqData = withUnsafeBytes(of: &seqBE) { Data($0) }
+            iv.replaceSubrange(8..<16, with: seqData)
+            return iv
+        }
+    }
+
+    private func parseKey(_ playlist: String, base: String) async throws -> KeyInfo? {
+        for rawLine in playlist.split(separator: "\n") {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("#EXT-X-KEY") else { continue }
+
+            if line.contains("METHOD=AES-128") {
+                guard let uri = Self.attribute("URI", in: line),
+                      let baseURL = URL(string: base),
+                      let keyURL = URL(string: uri, relativeTo: baseURL)?.absoluteString else {
+                    throw DownloadError.keyMissing
+                }
+                let keyData: Data
+                do {
+                    keyData = try await fetchBytes(keyURL)
+                } catch {
+                    throw DownloadError.keyFetchFailed
+                }
+                guard keyData.count == 16 else { throw DownloadError.keyInvalid }
+                let ivHex = Self.attribute("IV", in: line)
+                let explicitIV = ivHex.flatMap { Self.ivData(hex: $0) }
+                return KeyInfo(keyData: keyData, explicitIV: explicitIV)
+            }
+
+            // METHOD=NONE 或其他明文方式：无加密
+            return nil
+        }
+        return nil
+    }
+
+    private static func attribute(_ name: String, in line: String) -> String? {
+        let quoted = "\(name)=\"([^\"]*)\""
+        if let r = line.range(of: quoted, options: .regularExpression) {
+            let s = line[r]
+            return String(s.dropFirst(name.count + 2).dropLast())
+        }
+        let plain = "\(name)=([^,]+)"
+        if let r = line.range(of: plain, options: .regularExpression) {
+            let s = line[r]
+            return String(s.dropFirst(name.count + 1))
+        }
+        return nil
+    }
+
+    private static func ivData(hex: String) -> Data? {
+        var clean = hex.lowercased()
+        if clean.hasPrefix("0x") { clean.removeFirst(2) }
+        guard clean.count == 32, let bytes = hexToBytes(clean) else { return nil }
+        return Data(bytes)
+    }
+
+    private static func hexToBytes(_ hex: String) -> [UInt8]? {
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(hex.count / 2)
+        var i = hex.startIndex
+        while i < hex.endIndex {
+            let j = hex.index(i, offsetBy: 2)
+            guard j <= hex.endIndex, let byte = UInt8(hex[i..<j], radix: 16) else { return nil }
+            bytes.append(byte)
+            i = j
+        }
+        return bytes
+    }
+
+    private static func decrypt(segment: Data, key: Data, iv: Data) -> Data? {
+        guard key.count == 16, iv.count == 16 else { return nil }
+        var out = Data(count: segment.count + kCCBlockSizeAES128)
+        var outLen = 0
+        let status = key.withUnsafeBytes { k in
+            iv.withUnsafeBytes { i in
+                segment.withUnsafeBytes { s in
+                    CCCryptor(CCOperation(kCCDecrypt),
+                              CCAlgorithm(kCCAlgorithmAES128),
+                              CCOptions(kCCOptionPKCS7Padding),
+                              k.baseAddress, key.count,
+                              i.baseAddress,
+                              s.baseAddress, segment.count,
+                              out.mutableBytes, out.count, &outLen)
+                }
+            }
+        }
+        guard status == kCCSuccess else { return nil }
+        out.count = outLen
+        return out
+    }
+
+    // MARK: - 内容识别
+
+    private func looksLikeHTML(_ body: String) -> Bool {
+        let lower = body.lowercased()
+        return lower.hasPrefix("<!doctype") || lower.contains("<html") ||
+            lower.contains("<head") || lower.contains("<body")
+    }
+
+    private func dataIsVideo(_ data: Data) -> Bool {
+        guard data.count >= 12 else { return false }
+        let b = Array(data.prefix(12))
+        if b[0] == 0x47 { return true }                       // MPEG-TS 同步字
+        if b[4] == 0x66, b[5] == 0x74, b[6] == 0x79, b[7] == 0x70 { return true } // ftyp
+        return false
+    }
+
+    private static func directExtension(from url: String) -> String? {
+        let ext = (url as NSString).pathExtension.lowercased()
+        guard !ext.isEmpty, directExtensions.contains(ext) else { return nil }
+        return ext
+    }
+
+    /// 从网页 HTML / JSONP 里提取第一个内嵌视频地址（绝对或相对路径）
+    private static func extractVideoURL(_ html: String, base: String) -> String? {
+        let absolutePatterns = [
+            #"https?://[^""'\s<>\\]+\.m3u8[^""'\s<>\\]*"#,
+            #"https?://[^""'\s<>\\]+\.(?:mp4|m4v|mov|webm|mkv|avi|flv|ts|m4s)[^""'\s<>\\]*"#
+        ]
+        for pattern in absolutePatterns {
+            if let r = html.range(of: pattern, options: .regularExpression) {
+                return resolve(String(html[r]), base: base)
+            }
+        }
+        let relativePatterns = [
+            #"[^""'\s<>\\]+\.m3u8[^""'\s<>\\]*"#,
+            #"[^""'\s<>\\]+\.(?:mp4|m4v|mov|webm)[^""'\s<>\\]*"#
+        ]
+        for pattern in relativePatterns {
+            if let r = html.range(of: pattern, options: .regularExpression) {
+                let ref = String(html[r])
+                if !ref.contains("://") { return resolve(ref, base: base) }
+            }
+        }
+        return nil
+    }
+
     // MARK: - 状态与登记
 
-    private func setState(_ key: String, status: Status, progress: Double, done doneCount: Int, total totalCount: Int, fileName: String?) {
-        let state = TaskState(status: status, progress: progress, done: doneCount, total: totalCount, fileName: fileName)
+    private func setState(_ key: String, status: Status, progress: Double,
+                          done doneCount: Int, total totalCount: Int, fileName: String?) {
+        let state = TaskState(status: status, progress: progress, done: doneCount,
+                              total: totalCount, fileName: fileName)
         tasks[key] = state
     }
 
@@ -270,16 +555,39 @@ final class VodDownloadManager: ObservableObject {
         setState(key, status: .failed(message), progress: 0, done: done, total: total, fileName: nil)
     }
 
+    private func upsertRecord(url: String, title: String, episodeName: String, fileName: String) {
+        var reg = records
+        if var existing = reg[url] {
+            existing.title = title
+            existing.episodeName = episodeName
+            if !fileName.isEmpty { existing.fileName = fileName }
+            reg[url] = existing
+        } else {
+            reg[url] = DownloadRecord(url: url, title: title, episodeName: episodeName,
+                                      fileName: fileName, addedAt: Date())
+        }
+        records = reg
+    }
+
     private func register(_ key: String, fileName: String) {
-        var reg = registry
-        reg[key] = fileName
-        registry = reg
+        var reg = records
+        if var rec = reg[key] {
+            rec.fileName = fileName
+            reg[key] = rec
+        }
+        records = reg
         MediaLibrary.shared.reload()
     }
 
-    private func fileExists(_ fileName: String) -> Bool {
-        let url = MediaLibrary.shared.root.appendingPathComponent(fileName)
-        return FileManager.default.fileExists(atPath: url.path)
+    private func migrateLegacy() {
+        guard let legacy = UserDefaults.standard.dictionary(forKey: legacyKey) as? [String: String] else { return }
+        var reg = records
+        for (url, fileName) in legacy where reg[url] == nil {
+            reg[url] = DownloadRecord(url: url, title: "", episodeName: "",
+                                      fileName: fileName, addedAt: Date())
+        }
+        records = reg
+        UserDefaults.standard.removeObject(forKey: legacyKey)
     }
 
     // MARK: - 文件名
@@ -306,4 +614,8 @@ private enum DownloadError: Error {
     case badResponse
     case parseFailed
     case segmentFailed(Int)
+    case decryptFailed(Int)
+    case keyMissing
+    case keyFetchFailed
+    case keyInvalid
 }
