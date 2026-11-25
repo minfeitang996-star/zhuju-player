@@ -77,11 +77,12 @@ struct ImportedSite: Equatable {
     let searchable: Bool
 }
 
-/// 配置导入结果：分别统计可导入站点、被跳过的 JS 爬虫源、无效地址
+/// 配置导入结果：分别统计可导入站点、被跳过的 JS 爬虫源、无效地址；remoteSubscription 是文件里指向的远程订阅链接
 struct ConfigImportResult: Equatable {
     let added: [ImportedSite]
     let crawlerSkipped: Int
     let invalidSkipped: Int
+    let remoteSubscription: String?
 }
 
 // MARK: - 点播源清单（本地持久化）
@@ -320,72 +321,134 @@ final class VodStore: ObservableObject {
 
     /// 解析 TVBox / 影视仓配置 JSON，把可用的直采站点批量加入。
     /// - Parameters:
-    ///   - data: 配置原文（允许带 `//`、`/* */` 注释的 JSONC）
+    ///   - data: 配置原文（允许带 `//`、`/* */` 注释的 JSONC，部分备份为 base64 编码）
     ///   - baseURL: 配置链接本身，用于把 `./xxx` 这类相对接口地址补成绝对地址
     static func parseConfig(data: Data, baseURL: URL?) -> ConfigImportResult {
         var added: [ImportedSite] = []
         var crawlerSkipped = 0
         var invalidSkipped = 0
+        var seen = Set<String>()
+        var remote: String?
 
-        // 1) 优先按 JSON / JSONC 解析
+        func collect(_ entry: [String: Any]) {
+            let hasAPIKey = entry["api"] != nil
+            let rawAPI = siteString(entry, keys: ["api", "url", "link", "ext", "interface", "endpoint", "siteUrl", "sourceUrl"])
+            let name = siteString(entry, keys: ["name", "title", "nickName", "desc", "remark", "label"])
+            let type = typeValue(entry["type"])
+            let spider = siteString(entry, keys: ["spider", "js", "jar"])
+            let spiderLower = spider.lowercased()
+
+            // type 3 或带 .js / drpy / csp_ 标记的是依赖 JS 引擎的爬虫源，iOS 原生无法执行，跳过
+            if type == 3 || spiderLower.hasSuffix(".js") || spiderLower.contains("drpy") || spiderLower.hasPrefix("csp_") {
+                crawlerSkipped += 1
+                return
+            }
+            guard let api = Self.resolveAPI(rawAPI, base: baseURL), Self.isValidURL(api) else {
+                invalidSkipped += 1
+                return
+            }
+            // 指针对象：只有一个 .json/.txt 订阅链接、没有显式 api 键，记为远程订阅，由调用方二次拉取
+            if !hasAPIKey, (api.lowercased().contains(".json") || api.lowercased().contains(".txt")) {
+                if remote == nil { remote = api }
+                return
+            }
+
+            let key = api.lowercased()
+            guard !seen.contains(key) else { return }
+            seen.insert(key)
+            added.append(ImportedSite(name: name, api: api, searchable: searchableValue(entry["searchable"])))
+        }
+
+        func walk(_ node: Any) {
+            if let dict = node as? [String: Any] {
+                // urls 为字符串：远程订阅链接
+                if let urlsString = dict["urls"] as? String, remote == nil {
+                    remote = urlsString
+                } else if let urls = dict["urls"] as? [String: String] {
+                    for (n, u) in urls { collect(["name": n, "api": u]) }
+                } else if let urls = dict["urls"] as? [String: Any] {
+                    for (n, v) in urls {
+                        if let u = v as? String { collect(["name": n, "api": u]) }
+                    }
+                }
+                collect(dict)
+                for value in dict.values { walk(value) }
+            } else if let array = node as? [Any] {
+                for value in array { walk(value) }
+            }
+        }
+
+        // 1) JSON / JSONC 递归解析（站点可能嵌在 data / list / vod / sources 等任意键下）
         if let cleaned = stripJSONComments(data: data),
            let any = try? JSONSerialization.jsonObject(with: cleaned) {
-
-            var candidates: [[String: Any]] = []
-
-            if let json = any as? [String: Any] {
-                // 兼容多个配置键：sites / urls / site
-                candidates =
-                    (json["sites"] as? [[String: Any]] ?? []) +
-                    (json["urls"] as? [[String: Any]] ?? []) +
-                    (json["site"] as? [[String: Any]] ?? [])
-
-                // 单个站点对象：{"name":..,"api":..} / {"url":..}
-                if candidates.isEmpty,
-                   let api = (json["api"] as? String) ?? (json["url"] as? String), !api.isEmpty {
-                    candidates.append(json)
-                }
-            } else if let array = any as? [[String: Any]] {
-                // 顶层就是站点数组
-                candidates = array
-            }
-
-            for entry in candidates {
-                let rawAPI = (entry["api"] as? String) ?? (entry["url"] as? String) ?? ""
-                let name = (entry["name"] as? String) ?? (entry["title"] as? String) ?? ""
-                let type = entry["type"] as? Int ?? (entry["type"] as? Double).map { Int($0) }
-
-                // type 3 是依赖 JS 引擎的 CSP / drpy 爬虫源，iOS 原生无法执行，跳过
-                if type == 3 { crawlerSkipped += 1; continue }
-
-                guard let api = Self.resolveAPI(rawAPI, base: baseURL), Self.isValidURL(api) else {
-                    invalidSkipped += 1
-                    continue
-                }
-                let searchable = (entry["searchable"] as? Int ?? 1) != 0
-                added.append(ImportedSite(name: name, api: api, searchable: searchable))
-            }
-            if !candidates.isEmpty {
-                return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped)
-            }
+            walk(any)
         }
 
-        // 2) 兜底：纯文本 / 换行分隔，每行一个接口地址（也兼容逗号分隔）
+        // 2) base64 兜底：部分备份文件整体编码过一层
+        if added.isEmpty, let decoded = Data(base64Encoded: data), decoded.count < data.count,
+           let cleaned = stripJSONComments(data: decoded),
+           let any = try? JSONSerialization.jsonObject(with: cleaned) {
+            walk(any)
+        }
+
+        // 3) 纯文本兜底：每行 / 逗号一个接口地址
         guard let text = String(data: data, encoding: .utf8) else {
-            return ConfigImportResult(added: [], crawlerSkipped: 0, invalidSkipped: invalidSkipped)
+            return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped, remoteSubscription: remote)
         }
-        let lines = text.components(separatedBy: CharacterSet.newlines)
-            .flatMap { $0.components(separatedBy: ",") }
-        for line in lines {
-            let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !t.isEmpty else { continue }
-            if let api = Self.resolveAPI(t, base: baseURL), Self.isValidURL(api) {
-                added.append(ImportedSite(name: "", api: api, searchable: true))
-            } else {
-                invalidSkipped += 1
+        if added.isEmpty {
+            let lines = text.components(separatedBy: CharacterSet.newlines)
+                .flatMap { $0.components(separatedBy: ",") }
+            for line in lines {
+                let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !t.isEmpty else { continue }
+                if let api = Self.resolveAPI(t, base: baseURL), Self.isValidURL(api) {
+                    let key = api.lowercased()
+                    if !seen.contains(key) {
+                        seen.insert(key)
+                        added.append(ImportedSite(name: "", api: api, searchable: true))
+                    }
+                } else {
+                    invalidSkipped += 1
+                }
             }
         }
-        return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped)
+        return ConfigImportResult(added: added, crawlerSkipped: crawlerSkipped, invalidSkipped: invalidSkipped, remoteSubscription: remote)
+    }
+
+    /// 从配置原文里提取唯一（或第一条）远程订阅链接；本地文件只是指针时用它再拉一次
+    static func subscriptionURL(in data: Data) -> String? {
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        let pattern = #"https?://[^\s"'\\\]\}>]+"#
+        guard let r = text.range(of: pattern, options: .regularExpression) else { return nil }
+        return String(text[r])
+    }
+
+    private static func siteString(_ dict: [String: Any], keys: [String]) -> String {
+        for key in keys {
+            switch dict[key] {
+            case let s as String where !s.isEmpty: return s
+            case let n as NSNumber: return n.stringValue
+            default: continue
+            }
+        }
+        return ""
+    }
+
+    private static func typeValue(_ value: Any?) -> Int? {
+        if let i = value as? Int { return i }
+        if let d = value as? Double { return Int(d) }
+        if let s = value as? String { return Int(s) }
+        return nil
+    }
+
+    private static func searchableValue(_ value: Any?) -> Bool {
+        switch value {
+        case let b as Bool: return b
+        case let i as Int: return i != 0
+        case let d as Double: return d != 0
+        case let s as String: return s != "0" && s.lowercased() != "false"
+        default: return true
+        }
     }
 
     /// 把配置里的相对接口地址（`./xxx`、`//host/xxx`）补成绝对地址；无法识别返回 nil

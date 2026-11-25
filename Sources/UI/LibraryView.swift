@@ -37,6 +37,8 @@ struct LibraryView: View {
     @State private var showLive = false
     @State private var showLiveSource = false
     @State private var showVod = false
+    @State private var showDownloads = false
+    @ObservedObject private var downloads = VodDownloadManager.shared
     @State private var selected: MediaItem?
     @State private var importErrors: String?
     @State private var showErrors = false
@@ -155,6 +157,9 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showVod) {
                 VodView()
+            }
+            .sheet(isPresented: $showDownloads) {
+                VodDownloadsView()
             }
             .sheet(item: $jobTarget, onDismiss: { library.reload() }) { target in
                 JobView(videoURL: target.url)
@@ -430,6 +435,18 @@ struct LibraryView: View {
                     openVideo(resume)
                 } label: {
                     resumeHero(resume)
+                }
+                .buttonStyle(HomePressStyle(accent: theme.accent))
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+            }
+
+            if path.isEmpty {
+                Button {
+                    showDownloads = true
+                } label: {
+                    downloadsRow
                 }
                 .buttonStyle(HomePressStyle(accent: theme.accent))
                 .listRowSeparator(.hidden)
@@ -758,6 +775,50 @@ struct LibraryView: View {
             .fill(Color.white.opacity(0.07))
             .overlay(shape.stroke(Color.white.opacity(0.10), lineWidth: 1))
             .shadow(color: Color.black.opacity(0.25), radius: 10, x: 0, y: 3)
+    }
+
+    private var downloadSummary: String {
+        let done = downloads.allRecords.filter { downloads.fileExists($0) }.count
+        let active = downloads.tasks.values.contains {
+            if case .downloading = $0.status { return true }
+            return false
+        }
+        if active { return "下载中 · 已下载 \(done)" }
+        return "已下载 \(done)"
+    }
+
+    private var downloadsRow: some View {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [theme.accent.opacity(0.24), theme.accent.opacity(0.10)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ))
+                .frame(width: 54, height: 54)
+                .overlay(Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(theme.accent))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("下载管理")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text(downloadSummary)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.45))
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.22))
+        }
+        .padding(14)
+        .background(cardBackground(cornerRadius: 20))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func folderCard(_ url: URL, count: Int) -> some View {

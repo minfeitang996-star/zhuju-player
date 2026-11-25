@@ -265,14 +265,34 @@ struct VodSourceManagerView: View {
             importMessage = "读取本地文件失败"
             return
         }
-        let parsed = VodStore.parseConfig(data: data, baseURL: nil)
-        let added = store.importSites(parsed)
-        var message = "已导入 \(added) 个站点"
-        if parsed.crawlerSkipped > 0 { message += "；爬虫源跳过 \(parsed.crawlerSkipped) 个" }
-        if parsed.invalidSkipped > 0 { message += "；无效地址跳过 \(parsed.invalidSkipped) 个" }
-        if added == 0 && parsed.invalidSkipped == 0 && parsed.crawlerSkipped == 0 {
-            message = "文件里没有识别到可用的接口地址"
+
+        Task {
+            var parsed = VodStore.parseConfig(data: data, baseURL: nil)
+
+            // 本地文件只是订阅指针（里面存着一个远程配置链接）时，拉一次远程配置再解析
+            if parsed.added.isEmpty,
+               let link = parsed.remoteSubscription ?? VodStore.subscriptionURL(in: data),
+               let linkURL = URL(string: link),
+               let (remoteData, response) = try? await URLSession.shared.data(from: linkURL),
+               let http = response as? HTTPURLResponse,
+               (200...299).contains(http.statusCode) {
+                let remote = VodStore.parseConfig(data: remoteData, baseURL: linkURL)
+                parsed = ConfigImportResult(
+                    added: parsed.added + remote.added,
+                    crawlerSkipped: parsed.crawlerSkipped + remote.crawlerSkipped,
+                    invalidSkipped: parsed.invalidSkipped + remote.invalidSkipped,
+                    remoteSubscription: remote.remoteSubscription ?? parsed.remoteSubscription
+                )
+            }
+
+            let added = store.importSites(parsed)
+            var message = "已导入 \(added) 个站点"
+            if parsed.crawlerSkipped > 0 { message += "；爬虫源跳过 \(parsed.crawlerSkipped) 个" }
+            if parsed.invalidSkipped > 0 { message += "；无效地址跳过 \(parsed.invalidSkipped) 个" }
+            if added == 0 && parsed.invalidSkipped == 0 && parsed.crawlerSkipped == 0 {
+                message = "文件里没有识别到可用的接口地址；若这是加密或专用客户端备份，请把文件内容发我核对格式"
+            }
+            importMessage = message
         }
-        importMessage = message
     }
 }

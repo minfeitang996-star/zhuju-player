@@ -95,6 +95,15 @@ final class MediaLibrary: ObservableObject {
 
     let root: URL
 
+    /// 点播离线下载专用子目录：所有网络下载的剧集都归到这里，不堆在片库根目录
+    static let downloadsFolderName = "点播下载"
+
+    var downloadsFolder: URL {
+        let url = root.appendingPathComponent(Self.downloadsFolderName, isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
     /// VLC 能解码的常见容器格式，全部支持播放。
     static let videoExtensions: Set<String> = [
         "mp4", "mov", "m4v", "mkv", "avi", "flv", "wmv", "ts", "m2ts", "mts",

@@ -66,6 +66,7 @@ final class VodDownloadManager: ObservableObject {
 
     private init() {
         migrateLegacy()
+        migrateDownloadedFiles()
         // 启动时把已完成的登记恢复成 done；文件若已被手动删除则回退 idle
         var restored: [String: TaskState] = [:]
         for rec in records.values where fileExists(rec) {
@@ -84,7 +85,7 @@ final class VodDownloadManager: ObservableObject {
     func record(for url: String) -> DownloadRecord? { records[url] }
 
     func fileURL(for record: DownloadRecord) -> URL {
-        MediaLibrary.shared.root.appendingPathComponent(record.fileName)
+        MediaLibrary.shared.downloadsFolder.appendingPathComponent(record.fileName)
     }
 
     func fileExists(_ record: DownloadRecord) -> Bool {
@@ -224,8 +225,11 @@ final class VodDownloadManager: ObservableObject {
             return
         }
 
-        let dest = MediaLibrary.shared.uniqueDestination(for: "\(baseName).\(ext)")
+        let dest = finalDestination(baseName: baseName, ext: ext, existingFileName: records[key]?.fileName)
         do {
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try? FileManager.default.removeItem(at: dest)
+            }
             try data.write(to: dest, options: .atomic)
             register(key, fileName: dest.lastPathComponent)
             setState(key, status: .done, progress: 1, done: 1, total: 1, fileName: dest.lastPathComponent)
@@ -329,7 +333,10 @@ final class VodDownloadManager: ObservableObject {
             }
 
             try handle.close()
-            let dest = MediaLibrary.shared.uniqueDestination(for: "\(baseName).ts")
+            let dest = finalDestination(baseName: baseName, ext: "ts", existingFileName: records[key]?.fileName)
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try? FileManager.default.removeItem(at: dest)
+            }
             try FileManager.default.moveItem(at: tempURL, to: dest)
             register(key, fileName: dest.lastPathComponent)
             setState(key, status: .done, progress: 1, done: total, total: total, fileName: dest.lastPathComponent)
@@ -560,6 +567,42 @@ final class VodDownloadManager: ObservableObject {
         }
         records = reg
         MediaLibrary.shared.reload()
+    }
+
+    /// 下载落地目录：优先复用登记里已有的文件名（重试覆盖同一集，不再生成「名称 2」副本），重名才追加序号
+    private func finalDestination(baseName: String, ext: String, existingFileName: String?) -> URL {
+        let folder = MediaLibrary.shared.downloadsFolder
+        if let existingFileName, !existingFileName.isEmpty {
+            let current = folder.appendingPathComponent(existingFileName)
+            if FileManager.default.fileExists(atPath: current.path) {
+                return current
+            }
+        }
+        return MediaLibrary.shared.uniqueDestination(for: "\(baseName).\(ext)", in: folder)
+    }
+
+    /// 旧版本把下载片直接放在片库根目录；统一迁进「点播下载」子目录，登记同步更新
+    private func migrateDownloadedFiles() {
+        let fm = FileManager.default
+        let folder = MediaLibrary.shared.downloadsFolder
+        var reg = records
+        var changed = false
+        for (key, rec) in reg {
+            let legacy = MediaLibrary.shared.root.appendingPathComponent(rec.fileName)
+            let target = folder.appendingPathComponent(rec.fileName)
+            guard fm.fileExists(atPath: legacy.path), legacy.path != target.path else { continue }
+            if fm.fileExists(atPath: target.path) {
+                let alt = MediaLibrary.shared.uniqueDestination(for: rec.fileName, in: folder)
+                try? fm.moveItem(at: legacy, to: alt)
+                var mutable = rec
+                mutable.fileName = alt.lastPathComponent
+                reg[key] = mutable
+            } else {
+                try? fm.moveItem(at: legacy, to: target)
+            }
+            changed = true
+        }
+        if changed { records = reg }
     }
 
     private func migrateLegacy() {
