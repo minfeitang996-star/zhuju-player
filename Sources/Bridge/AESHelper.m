@@ -11,14 +11,14 @@
     size_t outSize = data.length + kCCBlockSizeAES128;
     NSMutableData *out = [NSMutableData dataWithLength:outSize];
     size_t moved = 0;
-    CCCryptorStatus status = CCCryptor(kCCDecrypt,
-                                        kCCAlgorithmAES128,
-                                        kCCOptionPKCS7Padding,
-                                        key.bytes, key.length,
-                                        iv.bytes,
-                                        data.bytes, data.length,
-                                        out.mutableBytes, outSize,
-                                        &moved);
+    CCCryptorStatus status = CCCrypt(kCCDecrypt,
+                                      kCCAlgorithmAES128,
+                                      kCCOptionPKCS7Padding,
+                                      key.bytes, key.length,
+                                      iv.bytes,
+                                      data.bytes, data.length,
+                                      out.mutableBytes, outSize,
+                                      &moved);
     if (status != kCCSuccess) {
         return nil;
     }

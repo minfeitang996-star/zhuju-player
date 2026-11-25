@@ -85,7 +85,10 @@ struct VodSourceManagerView: View {
             } message: {
                 Text("删除后不可恢复；观看记录和收藏会保留。")
             }
-            .alert("重命名源", isPresented: .constant(renameTarget != nil)) {
+            .alert("重命名源", isPresented: Binding(
+                get: { renameTarget != nil },
+                set: { if !$0 { renameTarget = nil } }
+            )) {
                 TextField("源名称", text: $renameText)
                 Button("取消") { renameTarget = nil }
                 Button("保存") {
@@ -95,7 +98,10 @@ struct VodSourceManagerView: View {
                     renameTarget = nil
                 }
             }
-            .alert("导入结果", isPresented: .constant(importMessage != nil)) {
+            .alert("导入结果", isPresented: Binding(
+                get: { importMessage != nil },
+                set: { if !$0 { importMessage = nil } }
+            )) {
                 Button("知道了") { importMessage = nil }
             } message: {
                 Text(importMessage ?? "")

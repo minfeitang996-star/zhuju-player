@@ -72,7 +72,10 @@ struct VodDownloadsView: View {
                 PlayerScreen(item: item)
                     .environmentObject(library)
             }
-            .alert("删除这条下载记录和本地文件？", isPresented: .constant(deleteTarget != nil)) {
+            .alert("删除这条下载记录和本地文件？", isPresented: Binding(
+                get: { deleteTarget != nil },
+                set: { if !$0 { deleteTarget = nil } }
+            )) {
                 Button("取消", role: .cancel) { deleteTarget = nil }
                 Button("删除", role: .destructive) {
                     if let target = deleteTarget { manager.removeRecord(target.url) }
