@@ -572,15 +572,13 @@ struct PlayerScreen: View {
         let target = min(max(0.2, scrubStart + seconds), length - 0.4)
         scrubTarget = target
 
+        // 拖动期间不向引擎发定位：连续跳转反复打断解码队列，是一顿一顿掉帧的主因；
+        // 这里只跟手刷新提示，松手后一次性落到目标位置。
         let now = Date().timeIntervalSince1970
-        let first = lastScrubSeekAt == 0
-        let interval: Double = first ? 0 : 0.15
-        if now - lastScrubSeekAt >= interval, abs(target - lastScrubSeekTarget) >= 1.5 {
+        if now - lastScrubSeekAt >= 0.1 {
             lastScrubSeekAt = now
-            lastScrubSeekTarget = target
-            controller.seekSeconds(target)
+            hudText = scrubHUD()
         }
-        hudText = scrubHUD()
     }
 
     private func scrubHUD() -> String {
@@ -595,11 +593,9 @@ struct PlayerScreen: View {
         guard isScrubbing else { return }
         isScrubbing = false
         let delta = scrubTarget - scrubStart
-        // 拖动中已经定位到附近就不再重复 seek，省掉松手时那一下重复解码的顿感
-        if abs(scrubTarget - lastScrubSeekTarget) >= 0.5 {
-            controller.seekSeconds(scrubTarget)
-            lastScrubSeekTarget = scrubTarget
-        }
+        // 松手一次性落到手指最终位置
+        controller.seekSeconds(scrubTarget)
+        lastScrubSeekTarget = scrubTarget
         if abs(delta) < 1 {
             hudText = nil
         } else {
