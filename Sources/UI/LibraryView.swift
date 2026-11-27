@@ -561,6 +561,8 @@ struct LibraryView: View {
                     selectedIDs.removeAll()
                 }
                 .font(.system(size: 14, weight: .semibold))
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
             } else {
                 Button {
                     selecting = true
@@ -570,23 +572,33 @@ struct LibraryView: View {
                     Label("选择", systemImage: "checkmark.circle")
                 }
                 .font(.system(size: 14))
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .disabled(videosInCurrentFolder.isEmpty)
             }
 
             Spacer()
 
-            Button {
-                viewMode = viewMode == "list" ? "grid" : "list"
-            } label: {
-                Image(systemName: viewMode == "list" ? "square.grid.2x2" : "list.bullet")
-            }
+            // 右侧视图切换 / 排序：各自固定命中框，plain 样式，避免 List 整行点击把热区串到左侧选择键
+            HStack(spacing: 16) {
+                Button {
+                    viewMode = viewMode == "list" ? "grid" : "list"
+                } label: {
+                    Image(systemName: viewMode == "list" ? "square.grid.2x2" : "list.bullet")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
-            Menu {
-                Button("按名称") { librarySort = "name" }
-                Button("按大小") { librarySort = "size" }
-                Button("按日期") { librarySort = "date" }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
+                Menu {
+                    Button("按名称") { librarySort = "name" }
+                    Button("按大小") { librarySort = "size" }
+                    Button("按日期") { librarySort = "date" }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
             }
         }
         .foregroundColor(.white.opacity(0.75))
