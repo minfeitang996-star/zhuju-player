@@ -524,7 +524,7 @@ struct PlayerScreen: View {
         if dragAxis == nil {
             let dx = abs(value.translation.width)
             let dy = abs(value.translation.height)
-            guard max(dx, dy) > 10 else { return }
+            guard max(dx, dy) > 6 else { return }
             dragAxis = dx > dy ? "h" : "v"
             if dragAxis == "v" {
                 baseBrightness = UIScreen.main.brightness
@@ -574,7 +574,9 @@ struct PlayerScreen: View {
         scrubTarget = target
 
         let now = Date().timeIntervalSince1970
-        if now - lastScrubSeekAt >= 0.22, abs(target - lastScrubSeekTarget) >= 3.0 {
+        let first = lastScrubSeekAt == 0
+        let interval: Double = first ? 0 : 0.1
+        if now - lastScrubSeekAt >= interval, abs(target - lastScrubSeekTarget) >= 0.6 {
             lastScrubSeekAt = now
             lastScrubSeekTarget = target
             controller.seekSeconds(target)
@@ -707,7 +709,7 @@ struct PlayerScreen: View {
                             .onEnded { _ in handleLongPress() }
                     )
                     .gesture(
-                        DragGesture(minimumDistance: 12)
+                        DragGesture(minimumDistance: 6)
                             .onChanged { value in
                                 handleDragChanged(value, in: geo.size)
                             }
