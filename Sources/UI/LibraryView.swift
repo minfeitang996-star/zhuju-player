@@ -618,6 +618,7 @@ struct LibraryView: View {
                 videoGridCell(item)
             }
         }
+        .frame(maxWidth: .infinity)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         .listRowBackground(Color.clear)
@@ -1056,15 +1057,15 @@ struct LibraryView: View {
             path.append(url)
             return
         }
+        let snapshot = path
         Task {
             let passed = await BiometricAuth.authenticate(reason: "解锁「\(url.lastPathComponent)」")
             await MainActor.run {
-                if passed {
-                    unlocked.insert(rel)
-                    path.append(url)
-                } else {
-                    lockFailed = true
-                }
+                guard passed else { lockFailed = true; return }
+                // 竞态防护：验证期间用户已退回上级或又点了别处，路径栈变了就不再把这个文件夹压回去
+                guard path == snapshot, !path.contains(url) else { return }
+                unlocked.insert(rel)
+                path.append(url)
             }
         }
     }
@@ -1075,12 +1076,11 @@ struct LibraryView: View {
             Task {
                 let passed = await BiometricAuth.authenticate(reason: "解锁「\(locked.lastPathComponent)」")
                 await MainActor.run {
-                    if passed {
-                        unlocked.insert(FolderLock.relativePath(locked))
-                        selected = item
-                    } else {
-                        lockFailed = true
-                    }
+                    guard passed else { lockFailed = true; return }
+                    // 竞态防护：文件已被删除/移走就不再打开，避免过期回调弹出错误的片
+                    guard library.allVideos().contains(where: { $0.url.path == item.url.path }) else { return }
+                    unlocked.insert(FolderLock.relativePath(locked))
+                    selected = item
                 }
             }
             return
@@ -1216,6 +1216,7 @@ private struct GridVideoCard: View {
                         .padding(8)
                 }
             }
+            .frame(maxWidth: .infinity)
             .overlay(alignment: .bottomTrailing) {
                 if let w = meta?.width, let h = meta?.height,
                    let resolution = VideoMetaStore.resolutionText(w: w, h: h) {
@@ -1245,6 +1246,7 @@ private struct GridVideoCard: View {
                 .foregroundColor(.white.opacity(0.45))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { store.load(item.url) }
     }
 }

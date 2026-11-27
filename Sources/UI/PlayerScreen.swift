@@ -855,13 +855,17 @@ struct PlayerScreen: View {
     private var topBar: some View {
         HStack(spacing: 12) {
             Button {
+                openPanel = nil
+                activeSheet = nil
                 controller.close()
                 dismiss()
+                // 兜底：万一第一层弹层没拆干净，延迟再退一次，避免卡在播放器里出不去
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { dismiss() }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(10)
+                    .padding(13)
                     .background(Color.black.opacity(0.5))
                     .clipShape(Circle())
             }
