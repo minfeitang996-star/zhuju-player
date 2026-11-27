@@ -322,12 +322,11 @@ final class PlayerController: ObservableObject {
         }
 
         switch Prefs.hwDecode {
-        case "hw":
-            media.addOption(":avcodec-hw=any")
         case "sw":
             media.addOption(":avcodec-hw=none")
         default:
-            break
+            // 自动 / 只走硬件：优先 VideoToolbox 硬解，硬解不可用时自动回落软解
+            media.addOption(":avcodec-hw=any")
         }
         if Prefs.deinterlace {
             media.addOption(":deinterlace=1")

@@ -659,7 +659,8 @@ struct LibraryView: View {
                 openVideo(item)
             }
         } label: {
-            GridVideoCard(item: item, theme: theme, isFav: isFav(item))
+            GridVideoCard(item: item, theme: theme, isFav: isFav(item),
+                          inSelection: selecting, isSelected: selectedIDs.contains(item.id))
         }
         .buttonStyle(HomePressStyle(accent: theme.accent))
         .contextMenu { videoContextMenu(item) }
@@ -1201,6 +1202,8 @@ private struct GridVideoCard: View {
     let item: MediaItem
     let theme: AppTheme
     let isFav: Bool
+    let inSelection: Bool
+    let isSelected: Bool
     @ObservedObject private var store = VideoMetaStore.shared
 
     private var meta: VideoMeta? { store.cache[item.url.path] }
@@ -1217,6 +1220,14 @@ private struct GridVideoCard: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            .overlay(alignment: .topLeading) {
+                if inSelection {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 21))
+                        .foregroundColor(isSelected ? theme.accent : .white.opacity(0.55))
+                        .padding(8)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 if let w = meta?.width, let h = meta?.height,
                    let resolution = VideoMetaStore.resolutionText(w: w, h: h) {
