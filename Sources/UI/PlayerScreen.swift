@@ -65,6 +65,9 @@ final class PlayerController: ObservableObject {
     @Published var subtitlesEnabled = false
     @Published var rate: Float = 1.0
 
+    /// 拖动（横滑 / 进度条）期间置位，定时器暂停回读位置与时间，避免旧数据把进度条往回拉扯
+    var scrubbing = false
+
     /// 内嵌音轨 / 字幕轨列表（播放起来后才会填出来）
     @Published var audioTracks: [TrackInfo] = []
     @Published var subtitleTracks: [TrackInfo] = []
@@ -156,8 +159,10 @@ final class PlayerController: ObservableObject {
                 Boot.mark("H tick playing=\(self.player.isPlaying)")
             }
             self.playing = self.player.isPlaying
-            self.position = self.player.position
-            self.timeText = Self.format(self.player.time.intValue)
+            if !self.scrubbing {
+                self.position = self.player.position
+                self.timeText = Self.format(self.player.time.intValue)
+            }
             self.lengthText = Self.format(self.player.media?.length.intValue ?? 0)
             NowPlayingBridge.shared.tick(playing: self.player.isPlaying,
                                         current: Double(self.player.time.intValue) / 1000.0,
@@ -413,6 +418,8 @@ struct PlayerScreen: View {
     @State private var dragStartPad: CGFloat?
     @State private var openPanel: PlayPanel?
     @State private var holdingBoost = false
+    @State private var sliderDragging = false
+    @State private var sliderPos: Float = 0
 
     // 1.7.20 横滑快进：拖动期间实时跟手预览 + 节流定位，松手只做一次最终定位
     @State private var isScrubbing = false
@@ -559,6 +566,7 @@ struct PlayerScreen: View {
         lastScrubSeekAt = 0
         lastScrubSeekTarget = scrubStart
         isScrubbing = true
+        controller.scrubbing = true
         // 拖动期间保持原播放状态：不暂停、不切播放键，避免松手恢复的二次动作卡顿
         hudText = scrubHUD()
     }
@@ -592,6 +600,7 @@ struct PlayerScreen: View {
     private func finishScrub() {
         guard isScrubbing else { return }
         isScrubbing = false
+        controller.scrubbing = false
         let delta = scrubTarget - scrubStart
         // 松手一次性落到手指最终位置
         controller.seekSeconds(scrubTarget)
@@ -924,13 +933,21 @@ struct PlayerScreen: View {
 
                 Slider(
                     value: Binding(
-                        get: { Double(controller.position) },
-                        set: {
-                            controller.seek(to: Float($0))
+                        get: { sliderDragging ? Double(sliderPos) : Double(controller.position) },
+                        set: { sliderPos = Float($0); sliderDragging = true }
+                    ),
+                    in: 0...1,
+                    onEditingChanged: { editing in
+                        if editing {
+                            sliderPos = controller.position
+                            controller.scrubbing = true
+                        } else {
+                            sliderDragging = false
+                            controller.scrubbing = false
+                            controller.seek(to: sliderPos)
                             scheduleLiveRestart()
                         }
-                    ),
-                    in: 0...1
+                    }
                 )
                 .tint(theme.accent)
 
