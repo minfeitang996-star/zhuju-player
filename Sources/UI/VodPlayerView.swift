@@ -252,13 +252,18 @@ struct VodPlayerView: View {
         let target = min(max(0.2, scrubStart + seconds), lengthSeconds - 0.4)
         scrubTarget = target
 
-        // 拖动期间不向引擎发定位，避免反复打断在线解码队列造成一顿一顿；
-        // 只跟手刷新提示，松手后一次性落到目标位置。
+        // 稀疏节流预览：隔一小段定位一次让画面跟手，避免每帧跳转反复打断在线解码；
+        // 首下立即响应，之后 0.3 秒 / 4 秒阈值再定位，松手无条件落到最终位置。
         let now = Date().timeIntervalSince1970
-        if now - lastScrubSeekAt >= 0.1 {
+        let first = lastScrubSeekAt == 0
+        let interval: Double = first ? 0 : 0.3
+        if now - lastScrubSeekAt >= interval, abs(target - lastScrubSeekTarget) >= 4.0 {
             lastScrubSeekAt = now
-            hudText = scrubHUD()
+            lastScrubSeekTarget = target
+            controller.player.position = Float(target / lengthSeconds)
+            currentSeconds = target
         }
+        hudText = scrubHUD()
     }
 
     private func scrubHUD() -> String {

@@ -25,6 +25,9 @@ final class LivePlayerController: ObservableObject {
 
         let media = VLCMedia(url: url)
         media.addOption(":input-fast-seek")
+        // 在线流缓冲：预留解码队列，避免网络抖动时画面追不上而卡顿停顿
+        media.addOption(":network-caching=300")
+        media.addOption(":live-caching=1000")
         player.media = media
         player.play()
 
