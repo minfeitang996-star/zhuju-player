@@ -564,6 +564,8 @@ struct LibraryView: View {
             } else {
                 Button {
                     selecting = true
+                    // 进入多选前清掉上一次残留的勾选，避免跨文件夹/筛选后旧选择带进来串标
+                    selectedIDs.removeAll()
                 } label: {
                     Label("选择", systemImage: "checkmark.circle")
                 }

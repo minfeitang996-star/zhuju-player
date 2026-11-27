@@ -76,7 +76,7 @@ struct VodPlayerView: View {
                         withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
                     }
                     .gesture(
-                        DragGesture(minimumDistance: 6)
+                        DragGesture(minimumDistance: 12)
                             .onChanged { value in
                                 handleDragChanged(value, in: geo.size)
                             }
@@ -218,7 +218,7 @@ struct VodPlayerView: View {
         if dragAxis == nil {
             let dx = abs(value.translation.width)
             let dy = abs(value.translation.height)
-            guard max(dx, dy) > 6 else { return }
+            guard max(dx, dy) > 10 else { return }
             dragAxis = dx > dy ? "h" : "v"
             if dragAxis == "h" { beginScrub() }
         }
@@ -256,8 +256,8 @@ struct VodPlayerView: View {
         // 拖动中限频定位：第一下立刻响应，之后小间隔持续跟手；在线解码队列仍留出缓冲
         let now = Date().timeIntervalSince1970
         let first = lastScrubSeekAt == 0
-        let interval: Double = first ? 0 : 0.1
-        let minDelta: Double = 0.8
+        let interval: Double = first ? 0 : 0.15
+        let minDelta: Double = 1.5
         if now - lastScrubSeekAt >= interval, abs(target - lastScrubSeekTarget) >= minDelta {
             lastScrubSeekAt = now
             lastScrubSeekTarget = target

@@ -72,6 +72,9 @@ final class VLCPlayerContainer: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         layoutInner()
+        // 横竖屏旋转后容器 bounds 变了，渲染层输出表面也要按新可见尺寸重算，
+        // 否则画面停在旧方向几何、填不满屏幕，要手动再转一下才铺满
+        reportSizeToVideoOutput()
     }
 
     /// 递归把 VLC 后插进来的渲染子视图 / 子层全部撑满当前区域
