@@ -353,7 +353,7 @@ struct LibraryView: View {
     }
 
     private var allSelected: Bool {
-        !videosInCurrentFolder.isEmpty && selectedIDs.count == videosInCurrentFolder.count
+        !filteredVideos.isEmpty && selectedIDs.count == filteredVideos.count
     }
 
     private func toggleSelection(_ item: MediaItem) {
@@ -385,7 +385,7 @@ struct LibraryView: View {
     }
 
     private func selectedVideos() -> [MediaItem] {
-        videosInCurrentFolder.filter { selectedIDs.contains($0.id) }
+        filteredVideos.filter { selectedIDs.contains($0.id) }
     }
 
     private func deleteSelected() {
@@ -737,7 +737,7 @@ struct LibraryView: View {
                 if allSelected {
                     selectedIDs.removeAll()
                 } else {
-                    selectedIDs = Set(videosInCurrentFolder.map { $0.id })
+                    selectedIDs = Set(filteredVideos.map { $0.id })
                 }
             }
             .font(.system(size: 14, weight: .medium))
