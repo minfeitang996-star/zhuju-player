@@ -241,8 +241,7 @@ struct VodPlayerView: View {
         lastScrubSeekAt = 0
         lastScrubSeekTarget = currentSeconds
         isScrubbing = true
-        // 拖动期间先暂停，避免在线流边解码边跳帧互相抢队列，落点更稳、不顿
-        controller.player.pause()
+        // 拖动期间保持原播放状态：不暂停、不切播放键，避免松手恢复的二次动作卡顿
         hudText = scrubHUD()
     }
 
@@ -284,12 +283,6 @@ struct VodPlayerView: View {
         currentSeconds = scrubTarget
         // 定位落地宽限期：这段时间内进度条不被引擎异步回读的旧位置覆盖
         scrubSettleUntil = Date().timeIntervalSince1970 + 0.5
-        if scrubWasPlaying {
-            // 等定位落地再恢复播放，避免边 seek 边起播互相抢解码
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [self] in
-                controller.player.play()
-            }
-        }
         if abs(delta) < 1 {
             hudText = nil
         } else {

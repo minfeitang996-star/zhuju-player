@@ -559,8 +559,7 @@ struct PlayerScreen: View {
         lastScrubSeekAt = 0
         lastScrubSeekTarget = scrubStart
         isScrubbing = true
-        // 拖动期间先暂停，避免 VLC 边解码边跳帧，定位更顺、不卡音
-        controller.player.pause()
+        // 拖动期间保持原播放状态：不暂停、不切播放键，避免松手恢复的二次动作卡顿
         hudText = scrubHUD()
     }
 
@@ -600,12 +599,6 @@ struct PlayerScreen: View {
         if abs(scrubTarget - lastScrubSeekTarget) >= 0.5 {
             controller.seekSeconds(scrubTarget)
             lastScrubSeekTarget = scrubTarget
-        }
-        if scrubWasPlaying {
-            // 等定位落地再恢复播放，避免边 seek 边起播互相抢解码
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [controller] in
-                controller.player.play()
-            }
         }
         if abs(delta) < 1 {
             hudText = nil
@@ -950,14 +943,14 @@ struct PlayerScreen: View {
                     .foregroundColor(.white.opacity(0.8))
             }
 
-            HStack(spacing: 22) {
+            HStack(spacing: 14) {
                 Button {
                     toggleOrientationLock()
                 } label: {
                     Image(systemName: orientationLocked ? "lock.fill" : "lock.open")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 36, minHeight: 40)
                         .contentShape(Rectangle())
                 }
 
@@ -967,7 +960,7 @@ struct PlayerScreen: View {
                     Image(systemName: "backward.end.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 36, minHeight: 40)
                         .contentShape(Rectangle())
                 }
 
@@ -978,16 +971,16 @@ struct PlayerScreen: View {
                     Image(systemName: "backward.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 36, minHeight: 40)
                         .contentShape(Rectangle())
                 }
 
                 Button {
                     controller.togglePlay()
                 } label: {
-                    PlayPauseGlyph(playing: controller.playing)
+                    PlayPauseGlyph(playing: isScrubbing ? scrubWasPlaying : controller.playing)
                         .frame(width: 30, height: 26)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 36, minHeight: 40)
                         .contentShape(Rectangle())
                 }
 
@@ -998,7 +991,7 @@ struct PlayerScreen: View {
                     Image(systemName: "forward.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 36, minHeight: 40)
                         .contentShape(Rectangle())
                 }
 
@@ -1006,6 +999,7 @@ struct PlayerScreen: View {
                 Image(systemName: "hare")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(holdingBoost ? theme.accent : .white.opacity(Prefs.holdBoostEnabled ? 0.9 : 0.35))
+                    .frame(minWidth: 36, minHeight: 40)
                     .contentShape(Rectangle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
@@ -1028,7 +1022,7 @@ struct PlayerScreen: View {
                     Image(systemName: "forward.end.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 36, minHeight: 40)
                         .contentShape(Rectangle())
                 }
 
@@ -1038,7 +1032,7 @@ struct PlayerScreen: View {
                     Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 19, weight: .medium))
                         .foregroundColor(.white)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 36, minHeight: 40)
                         .contentShape(Rectangle())
                 }
             }
