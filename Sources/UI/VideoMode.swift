@@ -218,6 +218,9 @@ struct VLCVideoView: UIViewRepresentable {
             guard let view else { return }
             DispatchQueue.main.async { [weak self] in
                 guard let self, let view = self.view else { return }
+                // 首帧 / 视频尺寸回传后，先把最新 videoSize、比例喂进容器，再强制重排，
+                // 避免画面停在零尺寸或旧比例上变成居中窄条。
+                self.parent.apply(to: view)
                 self.parent.relayout(view)
             }
         }
@@ -253,12 +256,17 @@ struct VLCVideoView: UIViewRepresentable {
         c.lastTick = tick
         guard changed else { return }
 
-        uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
+        apply(to: uiView)
         relayout(uiView)
         // 首帧 / 渲染层可能晚于视图插入，延后几拍再强制重排，避免初次进播停在旧尺寸
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { relayout(uiView) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { relayout(uiView) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { relayout(uiView) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self.apply(to: uiView); self.relayout(uiView) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.apply(to: uiView); self.relayout(uiView) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { self.apply(to: uiView); self.relayout(uiView) }
+    }
+
+    /// 把当前模式 / 安全区 / 最新视频尺寸 / 比例同步进容器，供状态回调与刷新时复用
+    private func apply(to uiView: VLCPlayerContainer) {
+        uiView.update(mode: mode, safeArea: safeArea, videoSize: player.videoSize, aspect: aspect)
     }
 
     static func dismantleUIView(_ uiView: VLCPlayerContainer, coordinator: Coordinator) {

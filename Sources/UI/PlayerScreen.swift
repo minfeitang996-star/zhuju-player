@@ -957,6 +957,8 @@ struct PlayerScreen: View {
                     Image(systemName: orientationLocked ? "lock.fill" : "lock.open")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
 
                 Button {
@@ -965,6 +967,8 @@ struct PlayerScreen: View {
                     Image(systemName: "backward.end.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
 
                 Button {
@@ -974,6 +978,8 @@ struct PlayerScreen: View {
                     Image(systemName: "backward.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
 
                 Button {
@@ -981,6 +987,8 @@ struct PlayerScreen: View {
                 } label: {
                     PlayPauseGlyph(playing: controller.playing)
                         .frame(width: 30, height: 26)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
 
                 Button {
@@ -990,6 +998,8 @@ struct PlayerScreen: View {
                     Image(systemName: "forward.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
 
                 // 按住临时加速：按下提倍速，松开恢复原倍速
@@ -1018,6 +1028,8 @@ struct PlayerScreen: View {
                     Image(systemName: "forward.end.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
 
                 Button {
@@ -1026,6 +1038,8 @@ struct PlayerScreen: View {
                     Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 19, weight: .medium))
                         .foregroundColor(.white)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
             }
             .padding(.bottom, 18)
